@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ZK Vault</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div>
+    <!-- Header -->
+    <header>
+      <div class="header-content">
+        <div class="header-left">
+          <div class="logo">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+            </svg>
+          </div>
+          <div>
+            <h1>ZK Vault</h1>
+            <p class="version">v0.1.0</p>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Navigation Tabs -->
+    <nav>
+      <button class="tab-btn active" data-tab="proofs">Proofs</button>
+      <button class="tab-btn" data-tab="permissions">Permissions</button>
+      <button class="tab-btn" data-tab="settings">Settings</button>
+    </nav>
+
+    <!-- Proofs Tab -->
+    <div id="proofs-tab" class="tab-content active">
+      <div class="section">
+        <h2>Your Proofs</h2>
+        <p class="info">Generate zero-knowledge proofs to verify claims without revealing private data.</p>
+      </div>
+
+      <div id="proofs-list" class="proofs-list">
+        <!-- Proof cards will be inserted here -->
+      </div>
+
+      <div class="section">
+        <h3>Generate New Proof</h3>
+        <div class="proof-options">
+          <button class="proof-option" data-type="email_domain">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+            </svg>
+            <span>Email Domain</span>
+          </button>
+
+          <button class="proof-option" data-type="country">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <span>Country</span>
+          </button>
+
+          <button class="proof-option disabled" disabled data-type="age">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+            </svg>
+            <span>Age (Coming Soon)</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Permissions Tab -->
+    <div id="permissions-tab" class="tab-content">
+      <div class="section">
+        <h2>App Permissions</h2>
+        <p class="info">Manage which websites can access your proofs.</p>
+      </div>
+
+      <div id="permissions-list" class="permissions-list">
+        <!-- Permission cards will be inserted here -->
+      </div>
+
+      <div class="empty-state" id="no-permissions">
+        <svg class="empty-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+        </svg>
+        <p>No apps have been granted permissions yet.</p>
+      </div>
+    </div>
+
+    <!-- Settings Tab -->
+    <div id="settings-tab" class="tab-content">
+      <div class="section">
+        <h2>Settings</h2>
+      </div>
+
+      <div class="settings-list">
+        <div class="setting-item">
+          <div class="setting-info">
+            <h3>Proof Expiry</h3>
+            <p>How long proofs remain valid</p>
+          </div>
+          <select id="expiry-days">
+            <option value="7">7 days</option>
+            <option value="30" selected>30 days</option>
+            <option value="90">90 days</option>
+            <option value="365">1 year</option>
+          </select>
+        </div>
+
+        <div class="setting-item">
+          <div class="setting-info">
+            <h3>Auto-Approve Requests</h3>
+            <p>Automatically approve proof requests from trusted sites</p>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="auto-approve">
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="setting-item">
+          <div class="setting-info">
+            <h3>Clear All Data</h3>
+            <p>Delete all proofs and permissions</p>
+          </div>
+          <button id="clear-data" class="btn-danger btn-small">Clear</button>
+        </div>
+      </div>
+
+      <div class="section">
+        <h3>About</h3>
+        <div class="about-info">
+          <p><strong>Version:</strong> 0.1.0</p>
+          <p><strong>Privacy:</strong> All proofs stored locally</p>
+          <p><strong>Open Source:</strong> <a href="https://github.com/Cosmos-Harry/zk-vault" target="_blank">GitHub</a></p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Proof Generation Modal -->
+  <div id="generate-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="modal-title">Generate Proof</h2>
+        <button class="modal-close">&times;</button>
+      </div>
+      <div class="modal-body" id="modal-body">
+        <!-- Dynamic content based on proof type -->
+      </div>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
