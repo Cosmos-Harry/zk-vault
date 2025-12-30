@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Test Proof Card Generation</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #09090b;
+      color: white;
+      padding: 40px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .controls {
+      margin-bottom: 20px;
+    }
+    button {
+      background: #10b981;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      margin-right: 10px;
+      font-weight: 600;
+    }
+    button:hover {
+      background: #059669;
+    }
+    #preview {
+      border: 2px solid #27272a;
+      border-radius: 12px;
+      overflow: hidden;
+      max-width: 540px;
+    }
+    #preview canvas {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <h1>🔒 ZK Vault - Proof Card Test</h1>
+
+  <div class="controls">
+    <button onclick="generateEmailCard()">Generate Email Domain Card</button>
+    <button onclick="generateCountryCard()">Generate Country Card</button>
+    <button onclick="downloadCard()">Download PNG</button>
+  </div>
+
+  <div id="preview"></div>
+
+  <script>
+    let currentCanvas = null;
+
+    // Country flag emoji helper
+    function getCountryFlag(code) {
+      const codePoints = code.toUpperCase().split('').map(char => 127397 + char.charCodeAt());
+      return String.fromCodePoint(...codePoints);
+    }
+
+    async function generateProofCardImage(type, proof) {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+
+      // Card dimensions (Instagram square post size)
+      const width = 1080;
+      const height = 1080;
+      canvas.width = width;
+      canvas.height = height;
+
+      // Background gradient
+      const gradient = ctx.createLinearGradient(0, 0, 0, height);
+      gradient.addColorStop(0, '#09090b'); // zinc-950
+      gradient.addColorStop(1, '#18181b'); // zinc-900
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, width, height);
+
+      // Border
+      ctx.strokeStyle = '#27272a'; // zinc-800
+      ctx.lineWidth = 3;
+      ctx.strokeRect(30, 30, width - 60, height - 60);
+
+      // Inner gradient accent border
+      const accentGradient = ctx.createLinearGradient(0, 0, width, height);
+      accentGradient.addColorStop(0, 'rgba(16, 185, 129, 0.3)'); // emerald-500/30
+      accentGradient.addColorStop(1, 'rgba(16, 185, 129, 0.1)'); // emerald-500/10
+      ctx.strokeStyle = accentGradient;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(50, 50, width - 100, height - 100);
+
+      // ZK Vault Logo/Title
+      ctx.fillStyle = '#10b981'; // emerald-500
+      ctx.font = 'bold 48px system-ui, -apple-system, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('🔒 ZK Vault', width / 2, 140);
+
+      ctx.fillStyle = '#71717a'; // zinc-500
+      ctx.font = '28px system-ui, -apple-system, sans-serif';
+      ctx.fillText('Zero-Knowledge Proof', width / 2, 190);
+
+      // Proof type specific content
+      let mainText = '';
+      let icon = '';
+      let subtitle = '';
+
+      if (type === 'email_domain') {
+        const domain = proof.publicInputs?.domain || 'unknown';
+        mainText = `@${domain}`;
+        icon = '📧';
+        subtitle = 'Email Domain Verified';
+      } else if (type === 'country') {
+        const countryCode = proof.publicInputs?.countryCode || '??';
+        const countryName = proof.publicInputs?.countryName || 'Unknown';
+        mainText = countryName;
+        icon = getCountryFlag(countryCode);
+        subtitle = 'Country Verified';
+      }
+
+      // Icon/Emoji
+      ctx.font = '180px system-ui, -apple-system, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(icon, width / 2, 420);
+
+      // Main text (domain or country)
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 72px system-ui, -apple-system, sans-serif';
+      ctx.fillText(mainText, width / 2, 550);
+
+      // Subtitle
+      ctx.fillStyle = '#10b981'; // emerald-500
+      ctx.font = '36px system-ui, -apple-system, sans-serif';
+      ctx.fillText(subtitle, width / 2, 610);
+
+      // Verified checkmark badge
+      ctx.fillStyle = 'rgba(16, 185, 129, 0.15)'; // emerald bg
+      ctx.beginPath();
+      // Rounded rectangle (fallback for older browsers)
+      const x = width / 2 - 120;
+      const y = 660;
+      const w = 240;
+      const h = 60;
+      const r = 30;
+      if (ctx.roundRect) {
+        ctx.roundRect(x, y, w, h, r);
+      } else {
+        // Manual rounded rect
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + w - r, y);
+        ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+        ctx.lineTo(x + w, y + h - r);
+        ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+        ctx.lineTo(x + r, y + h);
+        ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+        ctx.lineTo(x, y + r);
+        ctx.quadraticCurveTo(x, y, x + r, y);
+        ctx.closePath();
+      }
+      ctx.fill();
+
+      ctx.fillStyle = '#10b981';
+      ctx.font = 'bold 32px system-ui, -apple-system, sans-serif';
+      ctx.fillText('✓ Verified', width / 2, 700);
+
+      // Proof hash (truncated)
+      const fullHash = proof.data || '';
+      const truncatedHash = fullHash.length > 24
+        ? `${fullHash.substring(0, 12)}...${fullHash.substring(fullHash.length - 12)}`
+        : fullHash;
+
+      ctx.fillStyle = '#3f3f46'; // zinc-700
+      ctx.fillRect(120, 780, width - 240, 100);
+
+      ctx.fillStyle = '#71717a'; // zinc-500
+      ctx.font = '20px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('PROOF HASH', width / 2, 815);
+
+      ctx.fillStyle = '#10b981'; // emerald-500
+      ctx.font = 'bold 24px monospace';
+      ctx.fillText(truncatedHash, width / 2, 855);
+
+      // Generated date
+      const generatedDate = new Date(proof.generatedAt).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      });
+
+      ctx.fillStyle = '#52525b'; // zinc-600
+      ctx.font = '24px system-ui, -apple-system, sans-serif';
+      ctx.fillText(`Generated: ${generatedDate}`, width / 2, 940);
+
+      // Footer
+      ctx.fillStyle = '#3f3f46'; // zinc-700
+      ctx.font = '22px system-ui, -apple-system, sans-serif';
+      ctx.fillText('Privacy-preserving cryptographic verification', width / 2, 1000);
+
+      return canvas;
+    }
+
+    async function generateEmailCard() {
+      const proof = {
+        data: 'e879a320c3245f814f5fefbe30444c1d5561c6a0e2fc43c5bad198d8f4fde41d1234567890abcdef',
+        publicInputs: {
+          domain: 'gmail.com',
+          domainHash: 'abc123...',
+          commitment: 'def456...'
+        },
+        generatedAt: Date.now(),
+        expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000
+      };
+
+      currentCanvas = await generateProofCardImage('email_domain', proof);
+      document.getElementById('preview').innerHTML = '';
+      document.getElementById('preview').appendChild(currentCanvas);
+    }
+
+    async function generateCountryCard() {
+      const proof = {
+        data: 'f123b456c789d012e345f678a901b234c567d890e123f456a789b012c345d678e901f234a567b890',
+        publicInputs: {
+          countryCode: 'US',
+          countryName: 'United States',
+          commitment: 'xyz789...'
+        },
+        generatedAt: Date.now(),
+        expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000
+      };
+
+      currentCanvas = await generateProofCardImage('country', proof);
+      document.getElementById('preview').innerHTML = '';
+      document.getElementById('preview').appendChild(currentCanvas);
+    }
+
+    function downloadCard() {
+      if (!currentCanvas) {
+        alert('Generate a card first!');
+        return;
+      }
+
+      currentCanvas.toBlob((blob) => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'zk-vault-proof-test.png';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }, 'image/png');
+    }
+
+    // Auto-generate email card on load
+    window.addEventListener('load', () => {
+      generateEmailCard();
+    });
+  </script>
+</body>
+</html>

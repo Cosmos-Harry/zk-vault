@@ -117,31 +117,39 @@ export function extractAuthResults(headers) {
 }
 
 /**
- * Extract email domain from From header
+ * Extract user's email domain from headers
+ * For received emails: extract from To/Delivered-To header (user is receiver)
+ * For sent emails: extract from From header (user is sender)
  * @param {string} headers - Email headers
  * @returns {string} Email domain (e.g., "gmail.com")
- * @throws {Error} If From header not found or invalid
+ * @throws {Error} If headers not found or invalid
  */
 export function extractDomain(headers) {
   if (!headers || typeof headers !== 'string') {
     throw new Error('Invalid email headers');
   }
 
-  // From header format: From: "Name" <user@domain.com> or From: user@domain.com
+  // Try To/Delivered-To first (received emails - user is receiver)
+  const toRegex = /^(?:To|Delivered-To):\s*.*?<?([a-zA-Z0-9._%+-]+@([a-zA-Z0-9.-]+\.[a-zA-Z]{2,}))>?/mi;
+  const toMatch = headers.match(toRegex);
+
+  if (toMatch && toMatch[2]) {
+    const domain = toMatch[2].trim();
+    console.log('[Email Parser] Extracted domain from To/Delivered-To (received email):', domain);
+    return domain;
+  }
+
+  // Fall back to From header (sent emails - user is sender)
   const fromRegex = /^From:\s*.*?<?([a-zA-Z0-9._%+-]+@([a-zA-Z0-9.-]+\.[a-zA-Z]{2,}))>?/mi;
-  const match = headers.match(fromRegex);
+  const fromMatch = headers.match(fromRegex);
 
-  if (!match || !match[2]) {
-    throw new Error('From header not found or invalid email format');
+  if (fromMatch && fromMatch[2]) {
+    const domain = fromMatch[2].trim();
+    console.log('[Email Parser] Extracted domain from From (sent email):', domain);
+    return domain;
   }
 
-  const domain = match[2]; // Extract domain part (group 2)
-
-  if (!domain || domain.trim() === '') {
-    throw new Error('Could not extract domain from From header');
-  }
-
-  return domain.trim();
+  throw new Error('Could not extract email domain from To, Delivered-To, or From headers');
 }
 
 /**

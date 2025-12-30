@@ -19,6 +19,19 @@ const autoApproveCheckbox = document.getElementById('auto-approve');
 const clearDataButton = document.getElementById('clear-data');
 
 /**
+ * Global clipboard copy function (CSP-compliant)
+ */
+async function copyToClipboard(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    showNotification('Copied to clipboard!', 'success');
+  } catch (error) {
+    console.error('Failed to copy:', error);
+    showNotification('Failed to copy to clipboard', 'error');
+  }
+}
+
+/**
  * Initialize popup
  */
 document.addEventListener('DOMContentLoaded', async () => {
@@ -247,11 +260,17 @@ function showProofError(message) {
     <div class="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
       <p class="text-sm text-red-300 font-medium">❌ Error</p>
       <p class="text-xs text-red-400 mt-1">${getProofErrorMessage(message)}</p>
-      <button onclick="location.reload()" class="mt-3 text-xs text-red-400 hover:text-red-300 underline">
+      <button id="error-reload-btn" class="mt-3 text-xs text-red-400 hover:text-red-300 underline">
         Try Again
       </button>
     </div>
   `;
+
+  // Add event listener for reload button
+  const reloadBtn = container.querySelector('#error-reload-btn');
+  if (reloadBtn) {
+    reloadBtn.addEventListener('click', () => location.reload());
+  }
 }
 
 /**
@@ -549,7 +568,7 @@ function createProofCard(type, proof) {
         <div class="p-3 bg-zinc-800/30 border border-zinc-700/50 rounded-lg mb-3">
           <div class="flex justify-between items-center mb-2 text-[11px] text-zinc-500">
             <span>Proof Hash</span>
-            <button class="flex items-center gap-1 text-emerald-400 hover:text-emerald-300 transition-colors" onclick="event.stopPropagation(); window.copyToClipboard('${fullHash.replace(/'/g, "\\'")}')">
+            <button class="copy-hash-btn flex items-center gap-1 text-emerald-400 hover:text-emerald-300 transition-colors" data-hash="${fullHash.replace(/"/g, '&quot;')}">
               <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
               </svg>
@@ -596,7 +615,7 @@ function createProofCard(type, proof) {
         <div class="p-3 bg-zinc-800/30 border border-zinc-700/50 rounded-lg mb-3">
           <div class="flex justify-between items-center mb-2 text-[11px] text-zinc-500">
             <span>Proof Hash</span>
-            <button class="flex items-center gap-1 text-emerald-400 hover:text-emerald-300 transition-colors" onclick="event.stopPropagation(); window.copyToClipboard('${fullHash.replace(/'/g, "\\'")}')">
+            <button class="copy-hash-btn flex items-center gap-1 text-emerald-400 hover:text-emerald-300 transition-colors" data-hash="${fullHash.replace(/"/g, '&quot;')}">
               <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
               </svg>
@@ -627,6 +646,7 @@ function createProofCard(type, proof) {
   // Add event listeners
   const deleteBtn = card.querySelector('.delete-proof-btn');
   const shareBtn = card.querySelector('.share-proof-btn');
+  const copyHashBtn = card.querySelector('.copy-hash-btn');
 
   if (deleteBtn) {
     deleteBtn.addEventListener('click', () => deleteProof(type));
@@ -636,29 +656,203 @@ function createProofCard(type, proof) {
     shareBtn.addEventListener('click', () => shareProof(type, proof));
   }
 
+  if (copyHashBtn) {
+    copyHashBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const hash = copyHashBtn.getAttribute('data-hash');
+      copyToClipboard(hash);
+    });
+  }
+
   return card;
 }
 
 /**
- * Share proof data
+ * Generate proof card as PNG image using Canvas API
+ */
+async function generateProofCardImage(type, proof) {
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+
+  // Card dimensions (Instagram square post size)
+  const width = 1080;
+  const height = 1080;
+  canvas.width = width;
+  canvas.height = height;
+
+  // Background gradient
+  const gradient = ctx.createLinearGradient(0, 0, 0, height);
+  gradient.addColorStop(0, '#09090b'); // zinc-950
+  gradient.addColorStop(1, '#18181b'); // zinc-900
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, width, height);
+
+  // Border
+  ctx.strokeStyle = '#27272a'; // zinc-800
+  ctx.lineWidth = 3;
+  ctx.strokeRect(30, 30, width - 60, height - 60);
+
+  // Inner gradient accent border
+  const accentGradient = ctx.createLinearGradient(0, 0, width, height);
+  accentGradient.addColorStop(0, 'rgba(16, 185, 129, 0.3)'); // emerald-500/30
+  accentGradient.addColorStop(1, 'rgba(16, 185, 129, 0.1)'); // emerald-500/10
+  ctx.strokeStyle = accentGradient;
+  ctx.lineWidth = 2;
+  ctx.strokeRect(50, 50, width - 100, height - 100);
+
+  // ZK Vault Logo/Title
+  ctx.fillStyle = '#10b981'; // emerald-500
+  ctx.font = 'bold 48px system-ui, -apple-system, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('🔒 ZK Vault', width / 2, 140);
+
+  ctx.fillStyle = '#71717a'; // zinc-500
+  ctx.font = '28px system-ui, -apple-system, sans-serif';
+  ctx.fillText('Zero-Knowledge Proof', width / 2, 190);
+
+  // Proof type specific content
+  let mainText = '';
+  let icon = '';
+  let subtitle = '';
+
+  if (type === 'email_domain') {
+    const domain = proof.publicInputs?.domain || 'unknown';
+    mainText = `@${domain}`;
+    icon = '📧';
+    subtitle = 'Email Domain Verified';
+  } else if (type === 'country') {
+    const countryCode = proof.publicInputs?.countryCode || '??';
+    const countryName = proof.publicInputs?.countryName || 'Unknown';
+    mainText = countryName;
+    icon = getCountryFlag(countryCode);
+    subtitle = 'Country Verified';
+  }
+
+  // Icon/Emoji
+  ctx.font = '180px system-ui, -apple-system, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(icon, width / 2, 420);
+
+  // Main text (domain or country)
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 72px system-ui, -apple-system, sans-serif';
+  ctx.fillText(mainText, width / 2, 550);
+
+  // Subtitle
+  ctx.fillStyle = '#10b981'; // emerald-500
+  ctx.font = '36px system-ui, -apple-system, sans-serif';
+  ctx.fillText(subtitle, width / 2, 610);
+
+  // Verified checkmark badge
+  ctx.fillStyle = 'rgba(16, 185, 129, 0.15)'; // emerald bg
+  ctx.beginPath();
+  // Rounded rectangle (fallback for older browsers)
+  const x = width / 2 - 120;
+  const y = 660;
+  const w = 240;
+  const h = 60;
+  const r = 30;
+  if (ctx.roundRect) {
+    ctx.roundRect(x, y, w, h, r);
+  } else {
+    // Manual rounded rect
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+  }
+  ctx.fill();
+
+  ctx.fillStyle = '#10b981';
+  ctx.font = 'bold 32px system-ui, -apple-system, sans-serif';
+  ctx.fillText('✓ Verified', width / 2, 700);
+
+  // Proof hash (truncated)
+  const fullHash = proof.data || '';
+  const truncatedHash = fullHash.length > 24
+    ? `${fullHash.substring(0, 12)}...${fullHash.substring(fullHash.length - 12)}`
+    : fullHash;
+
+  ctx.fillStyle = '#3f3f46'; // zinc-700
+  ctx.fillRect(120, 780, width - 240, 100);
+
+  ctx.fillStyle = '#71717a'; // zinc-500
+  ctx.font = '20px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('PROOF HASH', width / 2, 815);
+
+  ctx.fillStyle = '#10b981'; // emerald-500
+  ctx.font = 'bold 24px monospace';
+  ctx.fillText(truncatedHash, width / 2, 855);
+
+  // Generated date
+  const generatedDate = new Date(proof.generatedAt).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
+  });
+
+  ctx.fillStyle = '#52525b'; // zinc-600
+  ctx.font = '24px system-ui, -apple-system, sans-serif';
+  ctx.fillText(`Generated: ${generatedDate}`, width / 2, 940);
+
+  // Footer
+  ctx.fillStyle = '#3f3f46'; // zinc-700
+  ctx.font = '22px system-ui, -apple-system, sans-serif';
+  ctx.fillText('Privacy-preserving cryptographic verification', width / 2, 1000);
+
+  // Convert canvas to blob
+  return new Promise((resolve) => {
+    canvas.toBlob((blob) => {
+      resolve(blob);
+    }, 'image/png');
+  });
+}
+
+/**
+ * Share proof as PNG card image
  */
 async function shareProof(type, proof) {
-  const proofData = {
-    type: type,
-    hash: proof.data,
-    publicInputs: proof.publicInputs,
-    generatedAt: proof.generatedAt,
-    expiresAt: proof.expiresAt
-  };
-
-  const shareText = JSON.stringify(proofData, null, 2);
-
   try {
-    await navigator.clipboard.writeText(shareText);
-    showNotification('Proof data copied to clipboard!', 'success');
+    // Show loading notification
+    showNotification('Generating proof card...', 'info');
+
+    // Generate PNG card
+    const blob = await generateProofCardImage(type, proof);
+
+    // Try Web Share API first (mobile/modern browsers)
+    if (navigator.share && navigator.canShare && navigator.canShare({ files: [new File([blob], 'proof.png', { type: 'image/png' })] })) {
+      const file = new File([blob], 'zk-vault-proof.png', { type: 'image/png' });
+
+      await navigator.share({
+        title: 'ZK Vault Proof',
+        text: 'My zero-knowledge proof from ZK Vault',
+        files: [file]
+      });
+
+      showNotification('Proof card shared!', 'success');
+    } else {
+      // Fallback: Download the PNG
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `zk-vault-proof-${type}-${Date.now()}.png`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      showNotification('Proof card downloaded! You can now share it.', 'success');
+    }
   } catch (error) {
-    console.error('Failed to copy proof:', error);
-    showNotification('Failed to copy proof data', 'error');
+    console.error('Failed to share proof:', error);
+    showNotification('Failed to share proof card', 'error');
   }
 }
 

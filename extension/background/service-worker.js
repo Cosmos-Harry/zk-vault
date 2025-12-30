@@ -11,7 +11,7 @@ import init, {
   prove_email_domain,
   is_prover_ready,
   is_email_prover_ready
-} from '../wasm/zk_chat.js';
+} from '../wasm/zk_vault.js';
 
 // Import email parser
 import { parseEmail, clearSensitiveData } from '../lib/email-parser.js';
