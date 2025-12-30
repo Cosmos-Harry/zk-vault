@@ -1,0 +1,21 @@
+{
+  "name": "zk-vault-extension",
+  "version": "0.1.0",
+  "description": "Zero-knowledge proof browser extension for privacy-preserving credential verification",
+  "scripts": {
+    "build:css": "npx tailwindcss -i ./popup/input.css -o ./popup/styles.css --minify",
+    "watch:css": "npx tailwindcss -i ./popup/input.css -o ./popup/styles.css --watch"
+  },
+  "keywords": [
+    "zero-knowledge",
+    "privacy",
+    "zk-proofs",
+    "groth16",
+    "dkim"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "tailwindcss": "^3.4.17"
+  }
+}

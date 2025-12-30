@@ -6,86 +6,86 @@
   <title>ZK Vault</title>
   <link rel="stylesheet" href="styles.css">
 </head>
-<body>
+<body class="w-[400px] min-h-[500px] bg-zinc-950 text-white font-mono">
   <div>
     <!-- Header -->
-    <header>
-      <div class="header-content">
-        <div class="header-left">
-          <div class="logo">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+    <header class="border-b border-zinc-800 bg-zinc-950 p-4">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" class="text-emerald-500">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
             </svg>
           </div>
           <div>
-            <h1>ZK Vault</h1>
-            <p class="version">v0.1.0</p>
+            <h1 class="text-sm font-bold text-emerald-500">ZK Vault</h1>
+            <p class="text-[10px] text-zinc-500">v0.1.0</p>
           </div>
         </div>
       </div>
     </header>
 
     <!-- Navigation Tabs -->
-    <nav>
-      <button class="tab-btn active" data-tab="proofs">Proofs</button>
-      <button class="tab-btn" data-tab="permissions">Permissions</button>
-      <button class="tab-btn" data-tab="settings">Settings</button>
+    <nav class="flex bg-zinc-900 border-b border-zinc-800">
+      <button class="tab-btn flex-1 px-3 py-3 text-[13px] font-medium text-zinc-400 hover:text-white hover:bg-zinc-800 transition-all relative active" data-tab="proofs">Proofs</button>
+      <button class="tab-btn flex-1 px-3 py-3 text-[13px] font-medium text-zinc-400 hover:text-white hover:bg-zinc-800 transition-all relative" data-tab="permissions">Permissions</button>
+      <button class="tab-btn flex-1 px-3 py-3 text-[13px] font-medium text-zinc-400 hover:text-white hover:bg-zinc-800 transition-all relative" data-tab="settings">Settings</button>
     </nav>
 
     <!-- Proofs Tab -->
-    <div id="proofs-tab" class="tab-content active">
-      <div class="section">
-        <h2>Your Proofs</h2>
-        <p class="info">Generate zero-knowledge proofs to verify claims without revealing private data.</p>
+    <div id="proofs-tab" class="tab-content block p-4">
+      <div class="mb-5">
+        <h2 class="text-base font-semibold mb-2">Your Proofs</h2>
+        <p class="text-xs text-zinc-400 leading-relaxed">Generate zero-knowledge proofs to verify claims without revealing private data.</p>
       </div>
 
-      <div id="proofs-list" class="proofs-list">
+      <div id="proofs-list" class="flex flex-col gap-3 mb-5">
         <!-- Proof cards will be inserted here -->
       </div>
 
-      <div class="section">
-        <h3>Generate New Proof</h3>
-        <div class="proof-options">
-          <button class="proof-option" data-type="email_domain">
-            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <div class="mb-5">
+        <h3 class="text-sm font-semibold mb-2 text-zinc-400">Generate New Proof</h3>
+        <div class="flex flex-col gap-2">
+          <button class="proof-option flex items-center gap-3 p-3 bg-zinc-900 border border-zinc-800 rounded-lg text-white hover:bg-zinc-800 hover:border-emerald-500 transition-all" data-type="email_domain">
+            <svg class="w-6 h-6 text-emerald-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                 d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
             </svg>
-            <span>Email Domain</span>
+            <span class="text-sm">Email Domain</span>
           </button>
 
-          <button class="proof-option" data-type="country">
-            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <button class="proof-option flex items-center gap-3 p-3 bg-zinc-900 border border-zinc-800 rounded-lg text-white hover:bg-zinc-800 hover:border-emerald-500 transition-all" data-type="country">
+            <svg class="w-6 h-6 text-emerald-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                 d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
             </svg>
-            <span>Country</span>
+            <span class="text-sm">Country</span>
           </button>
 
-          <button class="proof-option disabled" disabled data-type="age">
-            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <button class="proof-option flex items-center gap-3 p-3 bg-zinc-900 border border-zinc-800 rounded-lg text-white opacity-50 cursor-not-allowed disabled" disabled data-type="age">
+            <svg class="w-6 h-6 text-emerald-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                 d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
             </svg>
-            <span>Age (Coming Soon)</span>
+            <span class="text-sm">Age (Coming Soon)</span>
           </button>
         </div>
       </div>
     </div>
 
     <!-- Permissions Tab -->
-    <div id="permissions-tab" class="tab-content">
-      <div class="section">
-        <h2>App Permissions</h2>
-        <p class="info">Manage which websites can access your proofs.</p>
+    <div id="permissions-tab" class="tab-content hidden p-4">
+      <div class="mb-5">
+        <h2 class="text-base font-semibold mb-2">App Permissions</h2>
+        <p class="text-xs text-zinc-400 leading-relaxed">Manage which websites can access your proofs.</p>
       </div>
 
-      <div id="permissions-list" class="permissions-list">
+      <div id="permissions-list" class="flex flex-col gap-3">
         <!-- Permission cards will be inserted here -->
       </div>
 
-      <div class="empty-state" id="no-permissions">
-        <svg class="empty-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <div class="text-center py-10 text-zinc-400 text-[13px] hidden" id="no-permissions">
+        <svg class="w-12 h-12 mx-auto mb-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
             d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
         </svg>
@@ -94,18 +94,18 @@
     </div>
 
     <!-- Settings Tab -->
-    <div id="settings-tab" class="tab-content">
-      <div class="section">
-        <h2>Settings</h2>
+    <div id="settings-tab" class="tab-content hidden p-4">
+      <div class="mb-5">
+        <h2 class="text-base font-semibold mb-2">Settings</h2>
       </div>
 
-      <div class="settings-list">
-        <div class="setting-item">
-          <div class="setting-info">
-            <h3>Proof Expiry</h3>
-            <p>How long proofs remain valid</p>
+      <div class="flex flex-col gap-4">
+        <div class="flex justify-between items-center p-3 bg-zinc-900 border border-zinc-800 rounded-lg">
+          <div class="flex-1">
+            <h3 class="text-[13px] mb-1 text-white font-medium">Proof Expiry</h3>
+            <p class="text-[11px] text-zinc-400">How long proofs remain valid</p>
           </div>
-          <select id="expiry-days">
+          <select id="expiry-days" class="px-3 py-1.5 bg-zinc-800 border border-zinc-700 text-white rounded text-xs cursor-pointer hover:border-emerald-500 transition-colors">
             <option value="7">7 days</option>
             <option value="30" selected>30 days</option>
             <option value="90">90 days</option>
@@ -113,46 +113,67 @@
           </select>
         </div>
 
-        <div class="setting-item">
-          <div class="setting-info">
-            <h3>Auto-Approve Requests</h3>
-            <p>Automatically approve proof requests from trusted sites</p>
+        <div class="flex justify-between items-center p-3 bg-zinc-900 border border-zinc-800 rounded-lg">
+          <div class="flex-1">
+            <h3 class="text-[13px] mb-1 text-white font-medium">Auto-Approve Requests</h3>
+            <p class="text-[11px] text-zinc-400">Automatically approve proof requests from trusted sites</p>
           </div>
-          <label class="toggle">
-            <input type="checkbox" id="auto-approve">
-            <span class="slider"></span>
+          <label class="relative inline-block w-11 h-6">
+            <input type="checkbox" id="auto-approve" class="opacity-0 w-0 h-0 peer">
+            <span class="absolute cursor-pointer top-0 left-0 right-0 bottom-0 bg-zinc-800 border border-zinc-700 transition-all rounded-full before:absolute before:content-[''] before:h-4 before:w-4 before:left-0.5 before:bottom-0.5 before:bg-white before:transition-all before:rounded-full peer-checked:bg-emerald-500 peer-checked:border-emerald-500 peer-checked:before:translate-x-5"></span>
           </label>
         </div>
 
-        <div class="setting-item">
-          <div class="setting-info">
-            <h3>Clear All Data</h3>
-            <p>Delete all proofs and permissions</p>
+        <div class="flex justify-between items-center p-3 bg-zinc-900 border border-zinc-800 rounded-lg">
+          <div class="flex-1">
+            <h3 class="text-[13px] mb-1 text-white font-medium">Clear All Data</h3>
+            <p class="text-[11px] text-zinc-400">Delete all proofs and permissions</p>
           </div>
-          <button id="clear-data" class="btn-danger btn-small">Clear</button>
+          <button id="clear-data" class="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded text-xs transition-colors">Clear</button>
         </div>
       </div>
 
-      <div class="section">
-        <h3>About</h3>
-        <div class="about-info">
-          <p><strong>Version:</strong> 0.1.0</p>
-          <p><strong>Privacy:</strong> All proofs stored locally</p>
-          <p><strong>Open Source:</strong> <a href="https://github.com/Cosmos-Harry/zk-vault" target="_blank">GitHub</a></p>
+      <div class="mt-5">
+        <h3 class="text-sm font-semibold mb-2 text-zinc-400">About</h3>
+        <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-3 text-xs">
+          <p class="mb-1.5 text-zinc-400"><strong class="text-white">Version:</strong> 0.1.0</p>
+          <p class="mb-1.5 text-zinc-400"><strong class="text-white">Privacy:</strong> All proofs stored locally</p>
+          <p class="text-zinc-400"><strong class="text-white">Open Source:</strong> <a href="https://github.com/Cosmos-Harry/zk-vault" target="_blank" class="text-emerald-400 hover:underline">GitHub</a></p>
         </div>
       </div>
     </div>
   </div>
 
   <!-- Proof Generation Modal -->
-  <div id="generate-modal" class="modal">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h2 id="modal-title">Generate Proof</h2>
-        <button class="modal-close">&times;</button>
+  <div id="generate-modal" class="hidden fixed inset-0 bg-black/80 z-50 flex items-center justify-center">
+    <div class="bg-zinc-900 border border-zinc-800 rounded-xl w-[90%] max-w-md max-h-[80vh] overflow-y-auto">
+      <div class="flex justify-between items-center p-4 border-b border-zinc-800">
+        <h2 id="modal-title" class="text-base font-semibold">Generate Proof</h2>
+        <button class="modal-close text-zinc-400 hover:text-white text-2xl w-6 h-6 flex items-center justify-center transition-colors">&times;</button>
       </div>
-      <div class="modal-body" id="modal-body">
+      <div class="p-4" id="modal-body">
         <!-- Dynamic content based on proof type -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Delete Confirmation Modal -->
+  <div id="delete-modal" class="hidden fixed inset-0 bg-black/80 z-50 flex items-center justify-center">
+    <div class="bg-zinc-900 border border-zinc-800 rounded-xl w-[90%] max-w-md p-6">
+      <div class="flex items-start gap-4 mb-4">
+        <div class="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center flex-shrink-0">
+          <svg class="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+          </svg>
+        </div>
+        <div class="flex-1">
+          <h3 class="text-base font-semibold text-white mb-2">Delete Proof?</h3>
+          <p class="text-sm text-zinc-400" id="delete-modal-message">Are you sure you want to delete this proof? This action cannot be undone.</p>
+        </div>
+      </div>
+      <div class="flex gap-3 justify-end">
+        <button id="delete-modal-cancel" class="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-sm font-medium transition-colors">Cancel</button>
+        <button id="delete-modal-confirm" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition-colors">Delete</button>
       </div>
     </div>
   </div>

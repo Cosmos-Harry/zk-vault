@@ -49,15 +49,21 @@ function setupTabs() {
       const targetTab = tab.getAttribute('data-tab');
 
       // Update active tab button
-      tabs.forEach(t => t.classList.remove('active'));
-      tab.classList.add('active');
+      tabs.forEach(t => {
+        t.classList.remove('active', 'text-emerald-500');
+        t.classList.add('text-zinc-400');
+      });
+      tab.classList.add('active', 'text-emerald-500');
+      tab.classList.remove('text-zinc-400');
 
       // Update active tab content
       tabContents.forEach(content => {
         if (content.id === `${targetTab}-tab`) {
-          content.style.display = 'block';
+          content.classList.remove('hidden');
+          content.classList.add('block');
         } else {
-          content.style.display = 'none';
+          content.classList.add('hidden');
+          content.classList.remove('block');
         }
       });
     });
@@ -90,20 +96,184 @@ function setupProofGeneration() {
 function openGenerateModal(proofType) {
   modalTitle.textContent = getProofTitle(proofType);
   modalBody.innerHTML = getProofForm(proofType);
-  generateModal.style.display = 'flex';
+  generateModal.classList.remove('hidden');
+  generateModal.classList.add('flex');
 
   // Setup form submission
   const form = modalBody.querySelector('form');
   if (form) {
     form.addEventListener('submit', (e) => handleProofGeneration(e, proofType));
   }
+
+  // Setup email domain specific handlers
+  if (proofType === 'email_domain') {
+    setupEmailDomainHandlers();
+  }
+}
+
+/**
+ * Setup email domain specific button handlers
+ */
+function setupEmailDomainHandlers() {
+  const openGmailBtn = document.getElementById('open-gmail-btn');
+  const uploadBtn = document.getElementById('upload-btn');
+  const emlUpload = document.getElementById('eml-upload');
+  const fileSelected = document.getElementById('file-selected');
+
+  // Open Gmail button
+  if (openGmailBtn) {
+    openGmailBtn.addEventListener('click', () => {
+      chrome.tabs.create({ url: 'https://mail.google.com' });
+    });
+  }
+
+  // Upload button triggers file input
+  if (uploadBtn && emlUpload) {
+    uploadBtn.addEventListener('click', () => {
+      emlUpload.click();
+    });
+  }
+
+  // File selection handler
+  if (emlUpload) {
+    emlUpload.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        fileSelected.textContent = `Selected: ${file.name}`;
+        fileSelected.classList.remove('hidden');
+
+        // Auto-submit the form to start proof generation
+        handleEmailProofGeneration(file);
+      }
+    });
+  }
+}
+
+/**
+ * Handle email proof generation with file upload
+ */
+async function handleEmailProofGeneration(file) {
+  // Validate file
+  if (!file.name.endsWith('.eml')) {
+    showProofError('Please select a .eml file');
+    return;
+  }
+
+  const container = document.getElementById('progress-container');
+  container.classList.remove('hidden');
+  container.innerHTML = `
+    <div class="bg-zinc-800 border border-zinc-700 rounded-lg p-4 space-y-3">
+      <div class="flex items-center gap-2 text-sm text-zinc-300">
+        <div class="w-4 h-4 border-2 border-vault-500 border-t-transparent rounded-full animate-spin"></div>
+        <span id="progress-text">Reading email file...</span>
+      </div>
+      <div class="w-full bg-zinc-700 rounded-full h-2">
+        <div id="progress-bar" class="bg-vault-500 h-2 rounded-full transition-all duration-500" style="width: 10%"></div>
+      </div>
+      <p class="text-xs text-zinc-400 text-center">
+        Generating zero-knowledge proof (30-60 seconds)
+      </p>
+    </div>
+  `;
+
+  // Read file
+  const reader = new FileReader();
+  reader.onload = async (event) => {
+    const emlContent = event.target.result;
+
+    // Update progress
+    const progressText = document.getElementById('progress-text');
+    const progressBar = document.getElementById('progress-bar');
+
+    if (progressText) progressText.textContent = 'Verifying DKIM signature...';
+    if (progressBar) progressBar.style.width = '30%';
+
+    // Animate progress bar during 30-60s proof generation
+    let progress = 30;
+    const interval = setInterval(() => {
+      progress += 1;
+      if (progress <= 95 && progressBar) {
+        progressBar.style.width = `${progress}%`;
+      }
+      if (progress === 50 && progressText) {
+        progressText.textContent = 'Generating cryptographic proof...';
+      }
+    }, 600); // ~60 seconds to reach 95%
+
+    try {
+      const response = await chrome.runtime.sendMessage({
+        action: 'generateProof',
+        proofType: 'email_domain',
+        privateData: { emlContent }
+      });
+
+      clearInterval(interval);
+
+      if (response.error) {
+        showProofError(response.error);
+      } else {
+        // Complete progress
+        if (progressBar) progressBar.style.width = '100%';
+        if (progressText) progressText.textContent = '✓ Proof generated!';
+
+        setTimeout(() => {
+          closeGenerateModal();
+          loadProofs();
+          showNotification('Email domain proof generated!', 'success');
+        }, 1000);
+      }
+    } catch (error) {
+      clearInterval(interval);
+      showProofError(error.message);
+    }
+  };
+
+  reader.onerror = () => {
+    showProofError('Failed to read file');
+  };
+
+  reader.readAsText(file);
+}
+
+/**
+ * Show error in progress container
+ */
+function showProofError(message) {
+  const container = document.getElementById('progress-container');
+  if (!container) return;
+
+  container.classList.remove('hidden');
+  container.innerHTML = `
+    <div class="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
+      <p class="text-sm text-red-300 font-medium">❌ Error</p>
+      <p class="text-xs text-red-400 mt-1">${getProofErrorMessage(message)}</p>
+      <button onclick="location.reload()" class="mt-3 text-xs text-red-400 hover:text-red-300 underline">
+        Try Again
+      </button>
+    </div>
+  `;
+}
+
+/**
+ * Get user-friendly error message
+ */
+function getProofErrorMessage(error) {
+  if (error.includes('DKIM')) {
+    return "This email doesn't have a valid DKIM signature. Please try a different email from Gmail.";
+  } else if (error.includes('format')) {
+    return 'Invalid email file format. Make sure you downloaded the .eml file correctly.';
+  } else if (error.includes('From header')) {
+    return 'Could not extract email domain. Make sure the .eml file is valid.';
+  }
+  return error;
 }
 
 /**
  * Close proof generation modal
  */
 function closeGenerateModal() {
-  generateModal.style.display = 'none';
+  generateModal.classList.add('hidden');
+  generateModal.classList.remove('flex');
   modalBody.innerHTML = '';
 }
 
@@ -127,42 +297,82 @@ function getProofForm(proofType) {
     case 'email_domain':
       return `
         <form id="proof-form" class="space-y-4">
-          <div>
-            <label class="block mb-1.5 text-xs font-medium text-zinc-400">Email Address</label>
-            <input type="email" id="email-input" required
-              class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-white text-sm focus:outline-none focus:border-vault-500"
-              placeholder="your.email@example.com">
-            <p class="mt-1.5 text-xs text-zinc-400">We'll fetch DKIM signature from your Gmail account</p>
+          <div class="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
+            <div class="flex items-start gap-2">
+              <svg class="w-4 h-4 flex-shrink-0 mt-0.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+              </svg>
+              <div>
+                <p class="text-xs text-emerald-300 leading-relaxed">
+                  <strong>100% Private:</strong> We never access your Gmail account. You download one email file (.eml), we process it locally and immediately delete it from memory after generating your proof.
+                </p>
+              </div>
+            </div>
           </div>
-          <div class="p-3 bg-vault-500/10 border border-vault-500/30 rounded-lg">
-            <p class="text-xs text-vault-300">
-              <strong>Privacy:</strong> Your email stays private. Only your domain will be revealed.
-            </p>
+
+          <div class="bg-zinc-900/50 border border-zinc-700 rounded-xl p-4">
+            <div class="flex items-center gap-2.5 mb-3">
+              <div class="bg-emerald-500/15 w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0">
+                <span class="text-sm text-emerald-400 font-semibold">1</span>
+              </div>
+              <p class="text-sm font-medium text-zinc-200">Download Email from Gmail</p>
+            </div>
+            <ol class="text-xs text-zinc-400 leading-relaxed pl-9 mb-3 space-y-1">
+              <li>• Open any email in Gmail</li>
+              <li>• Click <strong class="text-zinc-300">⋮</strong> (three dots menu)</li>
+              <li>• Select <strong class="text-zinc-300">"Show original"</strong></li>
+              <li>• Click <strong class="text-zinc-300">"Download original"</strong> button</li>
+            </ol>
+            <button type="button" id="open-gmail-btn"
+              class="w-full py-2 px-4 bg-zinc-700 hover:bg-zinc-600 text-white rounded-lg text-[13px] transition-all flex items-center justify-center gap-2">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+              </svg>
+              Open Gmail in New Tab
+            </button>
           </div>
-          <button type="submit"
-            class="w-full py-2.5 bg-vault-500 hover:bg-vault-600 text-white rounded-lg text-sm font-semibold transition-colors">
-            Connect Gmail & Generate
-          </button>
+
+          <div class="bg-zinc-900/50 border border-zinc-700 rounded-xl p-4">
+            <div class="flex items-center gap-2.5 mb-3">
+              <div class="bg-emerald-500/15 w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0">
+                <span class="text-sm text-emerald-400 font-semibold">2</span>
+              </div>
+              <p class="text-sm font-medium text-zinc-200">Upload .eml File</p>
+            </div>
+            <input type="file" id="eml-upload" accept=".eml" class="hidden" required>
+            <button type="button" id="upload-btn"
+              class="w-full py-3 px-4 bg-gradient-to-br from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white rounded-lg text-sm font-semibold transition-all hover:shadow-lg hover:shadow-emerald-500/20 hover:-translate-y-0.5 flex items-center justify-center gap-2">
+              <svg class="w-4.5 h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+              </svg>
+              Choose .eml File
+            </button>
+            <p id="file-selected" class="text-xs text-zinc-400 hidden mt-2"></p>
+          </div>
+
+          <div id="progress-container" class="hidden"></div>
+
+          <button type="submit" class="hidden" id="submit-btn"></button>
         </form>
       `;
 
     case 'country':
       return `
-        <form id="proof-form">
-          <div class="info-box" style="margin-bottom: 16px;">
-            <p style="margin-bottom: 8px;"><strong>How it works:</strong></p>
-            <ol style="margin-left: 20px; font-size: 11px; line-height: 1.6;">
+        <form id="proof-form" class="space-y-4">
+          <div class="p-3 bg-zinc-800/50 border border-zinc-700 rounded-lg">
+            <p class="text-xs font-semibold text-zinc-300 mb-2">How it works:</p>
+            <ol class="ml-5 text-[11px] text-zinc-400 leading-relaxed space-y-1">
               <li>We detect your country from your IP address</li>
               <li>Generate cryptographic ZK proof (5-10 seconds)</li>
               <li>Only your country code is revealed</li>
             </ol>
           </div>
-          <div class="info-box" style="margin-bottom: 16px; background: rgba(34, 197, 94, 0.1); border-color: rgba(34, 197, 94, 0.3);">
-            <p class="text-xs">
+          <div class="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
+            <p class="text-xs text-emerald-300">
               <strong>100% Private:</strong> Uses IP-based geolocation (no GPS permissions needed). Only reveals your country code in the proof.
             </p>
           </div>
-          <button type="submit" class="btn-primary">
+          <button type="submit" class="w-full py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-semibold transition-colors">
             Detect Country & Generate Proof
           </button>
         </form>
@@ -199,10 +409,15 @@ function getProofForm(proofType) {
 }
 
 /**
- * Handle proof generation
+ * Handle proof generation (for non-email proofs)
  */
 async function handleProofGeneration(e, proofType) {
   e.preventDefault();
+
+  // Email domain uses file upload, handled separately
+  if (proofType === 'email_domain') {
+    return; // File upload handler takes over
+  }
 
   // Show loading state
   const submitButton = e.target.querySelector('button[type="submit"]');
@@ -219,15 +434,6 @@ async function handleProofGeneration(e, proofType) {
     // Collect private data based on proof type
     let privateData;
     switch (proofType) {
-      case 'email_domain':
-        const email = document.getElementById('email-input').value;
-        // TODO: Actually fetch DKIM signature from Gmail
-        privateData = {
-          email: email,
-          dkimSignature: 'MOCK_DKIM_SIGNATURE'
-        };
-        break;
-
       case 'country':
         // Country detection happens in background service worker (no CORS issues there)
         privateData = null; // Background will fetch country from IP
@@ -311,7 +517,7 @@ async function loadProofs() {
  */
 function createProofCard(type, proof) {
   const card = document.createElement('div');
-  card.className = 'proof-result-section';
+  card.className = 'mb-4';
 
   const isExpired = proof.expiresAt && Date.now() > proof.expiresAt;
   const generatedDate = new Date(proof.generatedAt).toLocaleDateString();
@@ -328,37 +534,43 @@ function createProofCard(type, proof) {
     const flag = getCountryFlag(countryCode);
 
     card.innerHTML = `
-      <div class="proof-result-content">
-        <div class="proof-result-header">
-          <div class="proof-result-info">
-            <span class="proof-country-flag">${flag}</span>
+      <div class="p-4 bg-zinc-900/50 border border-zinc-700 rounded-xl">
+        <div class="flex justify-between items-start mb-4">
+          <div class="flex items-center gap-3">
+            <span class="text-3xl leading-none">${flag}</span>
             <div>
-              <div class="proof-country-name">${countryName}</div>
-              <div class="proof-verified">${isExpired ? '✗ Expired' : '✓ Verified'}</div>
+              <div class="text-sm font-semibold text-white">${countryName}</div>
+              <div class="text-[11px] ${isExpired ? 'text-red-400' : 'text-emerald-400'}">${isExpired ? '✗ Expired' : '✓ Verified'}</div>
             </div>
           </div>
-          <div class="proof-date">${generatedDate}</div>
+          <div class="text-[11px] text-zinc-500">${generatedDate}</div>
         </div>
 
-        <div class="proof-hash-section">
-          <div class="proof-hash-label">
+        <div class="p-3 bg-zinc-800/30 border border-zinc-700/50 rounded-lg mb-3">
+          <div class="flex justify-between items-center mb-2 text-[11px] text-zinc-500">
             <span>Proof Hash</span>
-            <button class="copy-btn" onclick="event.stopPropagation(); window.copyToClipboard('${fullHash.replace(/'/g, "\\'")}')">
-              <svg class="copy-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <button class="flex items-center gap-1 text-emerald-400 hover:text-emerald-300 transition-colors" onclick="event.stopPropagation(); window.copyToClipboard('${fullHash.replace(/'/g, "\\'")}')">
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
               </svg>
               Copy
             </button>
           </div>
-          <code class="proof-hash">${truncatedHash}</code>
+          <code class="block font-mono text-[11px] text-emerald-400 break-all leading-relaxed">${truncatedHash}</code>
         </div>
 
-        <div class="proof-actions">
-          <button class="delete-proof-btn" data-type="${type}">
-            <svg class="action-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div class="flex gap-2">
+          <button class="share-proof-btn flex-1 flex items-center justify-center gap-2 py-2 px-3 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 hover:border-emerald-500/50 text-emerald-400 rounded-lg text-xs font-medium transition-all" data-type="${type}">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+            </svg>
+            Share
+          </button>
+          <button class="delete-proof-btn flex items-center justify-center gap-2 py-2 px-3 bg-transparent hover:bg-red-500/10 border border-zinc-700 hover:border-red-500 text-zinc-400 hover:text-red-400 rounded-lg text-xs font-medium transition-all" data-type="${type}">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
             </svg>
-            Delete Proof
+            Delete
           </button>
         </div>
       </div>
@@ -367,37 +579,45 @@ function createProofCard(type, proof) {
     const domain = proof.publicInputs?.domain || 'unknown';
 
     card.innerHTML = `
-      <div class="proof-result-content">
-        <div class="proof-result-header">
-          <div class="proof-result-info">
-            <span class="proof-country-flag">✉️</span>
+      <div class="p-4 bg-zinc-900/50 border border-zinc-700 rounded-xl">
+        <div class="flex justify-between items-start mb-4">
+          <div class="flex items-center gap-3">
+            <svg class="w-8 h-8 text-emerald-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+            </svg>
             <div>
-              <div class="proof-country-name">@${domain}</div>
-              <div class="proof-verified">${isExpired ? '✗ Expired' : '✓ Verified'}</div>
+              <div class="text-sm font-semibold text-white">@${domain}</div>
+              <div class="text-[11px] ${isExpired ? 'text-red-400' : 'text-emerald-400'}">${isExpired ? '✗ Expired' : '✓ Verified'}</div>
             </div>
           </div>
-          <div class="proof-date">${generatedDate}</div>
+          <div class="text-[11px] text-zinc-500">${generatedDate}</div>
         </div>
 
-        <div class="proof-hash-section">
-          <div class="proof-hash-label">
+        <div class="p-3 bg-zinc-800/30 border border-zinc-700/50 rounded-lg mb-3">
+          <div class="flex justify-between items-center mb-2 text-[11px] text-zinc-500">
             <span>Proof Hash</span>
-            <button class="copy-btn" onclick="event.stopPropagation(); window.copyToClipboard('${fullHash.replace(/'/g, "\\'")}')">
-              <svg class="copy-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <button class="flex items-center gap-1 text-emerald-400 hover:text-emerald-300 transition-colors" onclick="event.stopPropagation(); window.copyToClipboard('${fullHash.replace(/'/g, "\\'")}')">
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
               </svg>
               Copy
             </button>
           </div>
-          <code class="proof-hash">${truncatedHash}</code>
+          <code class="block font-mono text-[11px] text-emerald-400 break-all leading-relaxed">${truncatedHash}</code>
         </div>
 
-        <div class="proof-actions">
-          <button class="delete-proof-btn" data-type="${type}">
-            <svg class="action-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div class="flex gap-2">
+          <button class="share-proof-btn flex-1 flex items-center justify-center gap-2 py-2 px-3 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 hover:border-emerald-500/50 text-emerald-400 rounded-lg text-xs font-medium transition-all" data-type="${type}">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+            </svg>
+            Share
+          </button>
+          <button class="delete-proof-btn flex items-center justify-center gap-2 py-2 px-3 bg-transparent hover:bg-red-500/10 border border-zinc-700 hover:border-red-500 text-zinc-400 hover:text-red-400 rounded-lg text-xs font-medium transition-all" data-type="${type}">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
             </svg>
-            Delete Proof
+            Delete
           </button>
         </div>
       </div>
@@ -405,9 +625,41 @@ function createProofCard(type, proof) {
   }
 
   // Add event listeners
-  card.querySelector('.delete-proof-btn').addEventListener('click', () => deleteProof(type));
+  const deleteBtn = card.querySelector('.delete-proof-btn');
+  const shareBtn = card.querySelector('.share-proof-btn');
+
+  if (deleteBtn) {
+    deleteBtn.addEventListener('click', () => deleteProof(type));
+  }
+
+  if (shareBtn) {
+    shareBtn.addEventListener('click', () => shareProof(type, proof));
+  }
 
   return card;
+}
+
+/**
+ * Share proof data
+ */
+async function shareProof(type, proof) {
+  const proofData = {
+    type: type,
+    hash: proof.data,
+    publicInputs: proof.publicInputs,
+    generatedAt: proof.generatedAt,
+    expiresAt: proof.expiresAt
+  };
+
+  const shareText = JSON.stringify(proofData, null, 2);
+
+  try {
+    await navigator.clipboard.writeText(shareText);
+    showNotification('Proof data copied to clipboard!', 'success');
+  } catch (error) {
+    console.error('Failed to copy proof:', error);
+    showNotification('Failed to copy proof data', 'error');
+  }
 }
 
 /**
@@ -449,29 +701,62 @@ function getProofIcon(type) {
 }
 
 /**
- * Delete a proof
+ * Delete a proof with modal confirmation
  */
 async function deleteProof(type) {
-  if (!confirm('Are you sure you want to delete this proof?')) {
-    return;
-  }
+  // Show delete confirmation modal
+  const deleteModal = document.getElementById('delete-modal');
+  const deleteModalMessage = document.getElementById('delete-modal-message');
+  const deleteModalCancel = document.getElementById('delete-modal-cancel');
+  const deleteModalConfirm = document.getElementById('delete-modal-confirm');
 
-  try {
-    const response = await chrome.runtime.sendMessage({
-      action: 'deleteProof',
-      proofType: type
-    });
+  deleteModalMessage.textContent = `Are you sure you want to delete this ${type.replace('_', ' ')} proof? This action cannot be undone.`;
+  deleteModal.classList.remove('hidden');
+  deleteModal.classList.add('flex');
 
-    if (response.error) {
-      throw new Error(response.error);
+  // Handle modal actions
+  const handleCancel = () => {
+    deleteModal.classList.add('hidden');
+    deleteModal.classList.remove('flex');
+    deleteModalCancel.removeEventListener('click', handleCancel);
+    deleteModalConfirm.removeEventListener('click', handleConfirm);
+    deleteModal.removeEventListener('click', handleBackdropClick);
+  };
+
+  const handleConfirm = async () => {
+    deleteModal.classList.add('hidden');
+    deleteModal.classList.remove('flex');
+    deleteModalCancel.removeEventListener('click', handleCancel);
+    deleteModalConfirm.removeEventListener('click', handleConfirm);
+    deleteModal.removeEventListener('click', handleBackdropClick);
+
+    try {
+      const response = await chrome.runtime.sendMessage({
+        action: 'deleteProof',
+        proofType: type
+      });
+
+      if (response.error) {
+        throw new Error(response.error);
+      }
+
+      await loadProofs();
+      showNotification('Proof deleted successfully', 'success');
+    } catch (error) {
+      console.error('Error deleting proof:', error);
+      showNotification('Failed to delete proof: ' + error.message, 'error');
     }
+  };
 
-    await loadProofs();
-    showNotification('Proof deleted successfully', 'success');
-  } catch (error) {
-    console.error('Error deleting proof:', error);
-    showNotification('Failed to delete proof: ' + error.message, 'error');
-  }
+  const handleBackdropClick = (e) => {
+    if (e.target === deleteModal) {
+      handleCancel();
+    }
+  };
+
+  deleteModalCancel.addEventListener('click', handleCancel);
+  deleteModalConfirm.addEventListener('click', handleConfirm);
+  deleteModal.addEventListener('click', handleBackdropClick);
 }
 
 /**
@@ -497,11 +782,11 @@ async function loadPermissions() {
 
     if (!permissions || Object.keys(permissions).length === 0) {
       permissionsList.innerHTML = '';
-      noPermissions.style.display = 'block';
+      noPermissions.classList.remove('hidden');
       return;
     }
 
-    noPermissions.style.display = 'none';
+    noPermissions.classList.add('hidden');
     permissionsList.innerHTML = '';
 
     for (const [origin, proofTypes] of Object.entries(permissions)) {
@@ -613,9 +898,9 @@ function setupSettings() {
  */
 function showNotification(message, type = 'info') {
   const notification = document.createElement('div');
-  const bgColor = type === 'success' ? 'bg-green-600' : type === 'error' ? 'bg-red-600' : 'bg-vault-500';
+  const bgColor = type === 'success' ? 'bg-emerald-600' : type === 'error' ? 'bg-red-600' : 'bg-emerald-500';
 
-  notification.className = `fixed top-4 left-1/2 transform -translate-x-1/2 ${bgColor} text-white px-4 py-2 rounded-lg shadow-lg text-sm z-50 transition-opacity`;
+  notification.className = `fixed top-4 left-1/2 -translate-x-1/2 ${bgColor} text-white px-4 py-2 rounded-lg shadow-lg text-sm z-[100] transition-opacity duration-300`;
   notification.textContent = message;
 
   document.body.appendChild(notification);

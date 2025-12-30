@@ -6,9 +6,15 @@
 // Import WASM module
 import init, {
   init_country_prover,
+  init_email_prover,
   prove_country,
-  is_prover_ready
+  prove_email_domain,
+  is_prover_ready,
+  is_email_prover_ready
 } from '../wasm/zk_chat.js';
+
+// Import email parser
+import { parseEmail, clearSensitiveData } from '../lib/email-parser.js';
 
 // WASM initialization state
 let wasmInitialized = false;
@@ -41,14 +47,22 @@ async function initializeWASM() {
 
     // Initialize country prover (trusted setup)
     console.log('[ZK Vault] Performing trusted setup for country proofs...');
-    const success = init_country_prover();
+    const countrySuccess = init_country_prover();
 
-    if (!success) {
+    if (!countrySuccess) {
       throw new Error('Failed to initialize country prover');
     }
 
+    // Initialize email prover (trusted setup)
+    console.log('[ZK Vault] Performing trusted setup for email proofs...');
+    const emailSuccess = init_email_prover();
+
+    if (!emailSuccess) {
+      throw new Error('Failed to initialize email prover');
+    }
+
     wasmInitialized = true;
-    console.log('[ZK Vault] ✓ WASM initialized successfully');
+    console.log('[ZK Vault] ✓ WASM initialized successfully (country + email provers ready)');
     return true;
   } catch (error) {
     console.error('[ZK Vault] Failed to initialize WASM:', error);
@@ -280,30 +294,125 @@ async function handleProofGeneration(request, sendResponse) {
 
   } catch (error) {
     console.error('Error generating proof:', error);
-    sendResponse({ error: error.message });
+    const errorMessage = error?.message || String(error) || 'Unknown error occurred';
+    sendResponse({ error: errorMessage });
   }
 }
 
 /**
- * Generate email domain proof
+ * Generate email domain proof - REAL ZK PROOF IMPLEMENTATION
  */
 async function generateEmailDomainProof(privateData) {
-  // TODO: Implement actual ZK proof generation with WASM
-  // For now, return mock structure
+  console.log('[ZK Vault] Starting email domain proof generation...');
 
-  const { email, dkimSignature } = privateData;
-  const domain = email.split('@')[1];
+  const { emlContent } = privateData;
 
-  // This will be replaced with actual WASM ZK proof generation
-  return {
-    type: PROOF_TYPES.EMAIL_DOMAIN,
-    data: 'MOCK_PROOF_DATA_' + Math.random().toString(36),
-    publicInputs: {
-      domain: domain,
-      domainHash: hashString(domain)
-    },
-    privateData: null // Never store private data
-  };
+  if (!emlContent) {
+    throw new Error('No email content provided');
+  }
+
+  // Ensure WASM is initialized
+  if (!wasmInitialized) {
+    await initializeWASM();
+  }
+
+  if (!is_email_prover_ready()) {
+    throw new Error('Email prover not ready. Please try again.');
+  }
+
+  let rawEmail = emlContent;
+  let domain, dkimSignature, authResults;
+
+  try {
+    // Parse email to extract DKIM and domain (ephemeral processing)
+    console.log('[ZK Vault] Parsing email headers...');
+    const parsed = parseEmail(rawEmail);
+    domain = parsed.domain;
+    dkimSignature = parsed.dkimSignature;
+    authResults = parsed.authResults;
+
+    console.log('[ZK Vault] ✓ Email parsed successfully');
+    console.log('[ZK Vault] Domain:', domain);
+    console.log('[ZK Vault] DKIM signature length:', dkimSignature.length, 'chars');
+
+    // CRITICAL: Clear raw email from memory immediately after parsing
+    rawEmail = null;
+    privateData.emlContent = null;
+    delete privateData.emlContent;
+
+    // Generate REAL ZK proof using WASM
+    console.log('[ZK Vault] Generating real Groth16 proof for email domain...');
+    console.log('[ZK Vault] This may take 30-60 seconds...');
+
+    let result;
+    try {
+      result = prove_email_domain(domain, dkimSignature, authResults);
+      console.log('[ZK Vault] WASM result received (EmailProofResult object)');
+    } catch (wasmError) {
+      console.error('[ZK Vault] WASM function threw error:', wasmError);
+      throw new Error('WASM proof generation failed: ' + (wasmError?.message || String(wasmError)));
+    }
+
+    // CRITICAL: Clear DKIM signature from memory
+    dkimSignature = null;
+    authResults = null;
+
+    // Check if result exists
+    if (!result) {
+      throw new Error('WASM returned null or undefined result');
+    }
+
+    // Access WASM class getters (not plain object properties)
+    const success = result.success;
+    const dkimVerified = result.dkim_verified;
+    const resultDomain = result.domain;
+    const error = result.error;
+
+    console.log('[ZK Vault] Success:', success);
+    console.log('[ZK Vault] DKIM verified:', dkimVerified);
+    console.log('[ZK Vault] Domain:', resultDomain);
+
+    if (!success) {
+      const errorMsg = error || 'Proof generation failed (no error message from WASM)';
+      throw new Error(errorMsg);
+    }
+
+    if (!dkimVerified) {
+      throw new Error('DKIM verification failed - email signature invalid or not from ' + domain);
+    }
+
+    console.log('[ZK Vault] ✓ Real ZK proof generated!');
+
+    // Extract all proof data from WASM result object
+    const proofHex = result.proof_hex;
+    const domainHash = result.domain_hash;
+    const commitment = result.commitment;
+
+    console.log('[ZK Vault] Proof hex length:', proofHex.length);
+    console.log('[ZK Vault] Domain hash:', domainHash);
+    console.log('[ZK Vault] Commitment:', commitment);
+
+    return {
+      type: PROOF_TYPES.EMAIL_DOMAIN,
+      data: proofHex, // Real Groth16 proof
+      publicInputs: {
+        domain: resultDomain,
+        domainHash: domainHash,
+        commitment: commitment
+      },
+      privateData: null // NEVER store email content
+    };
+
+  } catch (error) {
+    // Ensure cleanup even on error
+    rawEmail = null;
+    privateData.emlContent = null;
+    dkimSignature = null;
+    authResults = null;
+
+    console.error('[ZK Vault] Email proof generation failed:', error);
+    throw error;
+  }
 }
 
 /**
