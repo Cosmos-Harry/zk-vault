@@ -1,7 +1,10 @@
 /**
  * ZK Vault Popup JavaScript
  * Handles UI interactions and communication with background service worker
+ * Version: 0.1.1 - 2026-01-04
  */
+
+console.log('[ZK Vault] Popup loaded - Version 0.1.3 - Back button visible, bigger card, no scrollbar');
 
 // DOM Elements
 const tabs = document.querySelectorAll('.tab-btn');
@@ -669,150 +672,161 @@ function createProofCard(type, proof) {
 
 /**
  * Generate proof card as PNG image using Canvas API
+ * Inspired by ZK Chat design - clean and professional
  */
 async function generateProofCardImage(type, proof) {
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d');
 
-  // Card dimensions (Instagram square post size)
-  const width = 1080;
-  const height = 1080;
+  // High resolution canvas (3x for crisp quality)
+  const displayWidth = 360;
+  const displayHeight = 480;
+  const scale = 3;
+  const width = displayWidth * scale;  // 1080px
+  const height = displayHeight * scale; // 1440px
   canvas.width = width;
   canvas.height = height;
 
-  // Background gradient
-  const gradient = ctx.createLinearGradient(0, 0, 0, height);
-  gradient.addColorStop(0, '#09090b'); // zinc-950
-  gradient.addColorStop(1, '#18181b'); // zinc-900
+  // Scale context for high-DPI rendering
+  ctx.scale(scale, scale);
+
+  // Background: Dark gradient (using display dimensions since we scaled context)
+  const gradient = ctx.createLinearGradient(0, 0, displayWidth, displayHeight);
+  gradient.addColorStop(0, '#1a1a1a');
+  gradient.addColorStop(1, '#0a0a0a');
   ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, width, height);
+  ctx.fillRect(0, 0, displayWidth, displayHeight);
 
-  // Border
-  ctx.strokeStyle = '#27272a'; // zinc-800
-  ctx.lineWidth = 3;
-  ctx.strokeRect(30, 30, width - 60, height - 60);
-
-  // Inner gradient accent border
-  const accentGradient = ctx.createLinearGradient(0, 0, width, height);
-  accentGradient.addColorStop(0, 'rgba(16, 185, 129, 0.3)'); // emerald-500/30
-  accentGradient.addColorStop(1, 'rgba(16, 185, 129, 0.1)'); // emerald-500/10
-  ctx.strokeStyle = accentGradient;
-  ctx.lineWidth = 2;
-  ctx.strokeRect(50, 50, width - 100, height - 100);
-
-  // ZK Vault Logo/Title
-  ctx.fillStyle = '#10b981'; // emerald-500
-  ctx.font = 'bold 48px system-ui, -apple-system, sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText('🔒 ZK Vault', width / 2, 140);
-
-  ctx.fillStyle = '#71717a'; // zinc-500
-  ctx.font = '28px system-ui, -apple-system, sans-serif';
-  ctx.fillText('Zero-Knowledge Proof', width / 2, 190);
+  // Rounded corners clipping
+  ctx.save();
+  const cornerRadius = 24;
+  ctx.beginPath();
+  ctx.moveTo(cornerRadius, 0);
+  ctx.lineTo(displayWidth - cornerRadius, 0);
+  ctx.quadraticCurveTo(displayWidth, 0, displayWidth, cornerRadius);
+  ctx.lineTo(displayWidth, displayHeight - cornerRadius);
+  ctx.quadraticCurveTo(displayWidth, displayHeight, displayWidth - cornerRadius, displayHeight);
+  ctx.lineTo(cornerRadius, displayHeight);
+  ctx.quadraticCurveTo(0, displayHeight, 0, displayHeight - cornerRadius);
+  ctx.lineTo(0, cornerRadius);
+  ctx.quadraticCurveTo(0, 0, cornerRadius, 0);
+  ctx.closePath();
+  ctx.clip();
 
   // Proof type specific content
   let mainText = '';
   let icon = '';
   let subtitle = '';
+  let revealsText = '';
+  let hiddenText = '';
 
   if (type === 'email_domain') {
     const domain = proof.publicInputs?.domain || 'unknown';
     mainText = `@${domain}`;
-    icon = '📧';
-    subtitle = 'Email Domain Verified';
+    icon = '✉️';
+    subtitle = 'Email Verified';
+    revealsText = '✓ Reveals: Email Domain';
+    hiddenText = '✗ Hidden: Full Email Address';
   } else if (type === 'country') {
     const countryCode = proof.publicInputs?.countryCode || '??';
     const countryName = proof.publicInputs?.countryName || 'Unknown';
     mainText = countryName;
     icon = getCountryFlag(countryCode);
     subtitle = 'Country Verified';
+    revealsText = '✓ Reveals: Country';
+    hiddenText = '✗ Hidden: IP, City, Exact Location';
   }
 
-  // Icon/Emoji
-  ctx.font = '180px system-ui, -apple-system, sans-serif';
+  // Large Icon/Emoji at top
+  ctx.font = '48px system-ui, -apple-system, sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText(icon, width / 2, 420);
+  ctx.fillText(icon, displayWidth / 2, 70);
 
-  // Main text (domain or country)
+  // Subtitle (verified type)
+  ctx.fillStyle = '#22c55e'; // emerald-500
+  ctx.font = '600 18px system-ui, -apple-system, sans-serif';
+  ctx.fillText(subtitle, displayWidth / 2, 110);
+
+  // Main text (domain or country name)
   ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 72px system-ui, -apple-system, sans-serif';
-  ctx.fillText(mainText, width / 2, 550);
+  ctx.font = 'bold 20px system-ui, -apple-system, sans-serif';
+  ctx.fillText(mainText, displayWidth / 2, 145);
 
-  // Subtitle
-  ctx.fillStyle = '#10b981'; // emerald-500
-  ctx.font = '36px system-ui, -apple-system, sans-serif';
-  ctx.fillText(subtitle, width / 2, 610);
+  // Proof Hash Box (semi-transparent background)
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
+  const boxX = 24;
+  const boxY = 170;
+  const boxWidth = displayWidth - 48;
+  const boxHeight = 100;
+  const boxRadius = 8;
 
-  // Verified checkmark badge
-  ctx.fillStyle = 'rgba(16, 185, 129, 0.15)'; // emerald bg
   ctx.beginPath();
-  // Rounded rectangle (fallback for older browsers)
-  const x = width / 2 - 120;
-  const y = 660;
-  const w = 240;
-  const h = 60;
-  const r = 30;
-  if (ctx.roundRect) {
-    ctx.roundRect(x, y, w, h, r);
-  } else {
-    // Manual rounded rect
-    ctx.moveTo(x + r, y);
-    ctx.lineTo(x + w - r, y);
-    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-    ctx.lineTo(x + w, y + h - r);
-    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-    ctx.lineTo(x + r, y + h);
-    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-    ctx.lineTo(x, y + r);
-    ctx.quadraticCurveTo(x, y, x + r, y);
-    ctx.closePath();
-  }
+  ctx.moveTo(boxX + boxRadius, boxY);
+  ctx.lineTo(boxX + boxWidth - boxRadius, boxY);
+  ctx.quadraticCurveTo(boxX + boxWidth, boxY, boxX + boxWidth, boxY + boxRadius);
+  ctx.lineTo(boxX + boxWidth, boxY + boxHeight - boxRadius);
+  ctx.quadraticCurveTo(boxX + boxWidth, boxY + boxHeight, boxX + boxWidth - boxRadius, boxY + boxHeight);
+  ctx.lineTo(boxX + boxRadius, boxY + boxHeight);
+  ctx.quadraticCurveTo(boxX, boxY + boxHeight, boxX, boxY + boxHeight - boxRadius);
+  ctx.lineTo(boxX, boxY + boxRadius);
+  ctx.quadraticCurveTo(boxX, boxY, boxX + boxRadius, boxY);
+  ctx.closePath();
   ctx.fill();
 
-  ctx.fillStyle = '#10b981';
-  ctx.font = 'bold 32px system-ui, -apple-system, sans-serif';
-  ctx.fillText('✓ Verified', width / 2, 700);
+  // "Proof Hash" label
+  ctx.fillStyle = '#a1a1aa'; // zinc-400
+  ctx.font = '11px system-ui, -apple-system, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('CRYPTOGRAPHIC PROOF', displayWidth / 2, 192);
 
-  // Proof hash (truncated)
+  // Hash value (word-wrapped, monospace)
   const fullHash = proof.data || '';
-  const truncatedHash = fullHash.length > 24
-    ? `${fullHash.substring(0, 12)}...${fullHash.substring(fullHash.length - 12)}`
-    : fullHash;
+  ctx.fillStyle = '#4ade80'; // emerald-400
+  ctx.font = '9px monospace';
 
-  ctx.fillStyle = '#3f3f46'; // zinc-700
-  ctx.fillRect(120, 780, width - 240, 100);
+  // Word wrap the hash to fit in box
+  const maxCharsPerLine = 32;
+  const hashLines = [];
+  for (let i = 0; i < fullHash.length && hashLines.length < 3; i += maxCharsPerLine) {
+    hashLines.push(fullHash.substring(i, i + maxCharsPerLine));
+  }
+
+  let yPos = 215;
+  for (const line of hashLines) {
+    ctx.fillText(line, displayWidth / 2, yPos);
+    yPos += 14;
+  }
+
+  // Privacy info section
+  ctx.fillStyle = '#71717a'; // zinc-500
+  ctx.font = '11px system-ui, -apple-system, sans-serif';
+  ctx.textAlign = 'center';
+
+  ctx.fillText(revealsText, displayWidth / 2, 310);
+  ctx.fillText(hiddenText, displayWidth / 2, 330);
+
+  // Separator line
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(24, 365);
+  ctx.lineTo(displayWidth - 24, 365);
+  ctx.stroke();
+
+  // Footer - ZK Vault branding
+  ctx.fillStyle = '#4ade80'; // emerald-400
+  ctx.font = '600 13px system-ui, -apple-system, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('ZK Vault', displayWidth / 2, 395);
 
   ctx.fillStyle = '#71717a'; // zinc-500
-  ctx.font = '20px monospace';
-  ctx.textAlign = 'center';
-  ctx.fillText('PROOF HASH', width / 2, 815);
+  ctx.font = '10px system-ui, -apple-system, sans-serif';
+  ctx.fillText('Prove Anything, Reveal Nothing', displayWidth / 2, 415);
 
-  ctx.fillStyle = '#10b981'; // emerald-500
-  ctx.font = 'bold 24px monospace';
-  ctx.fillText(truncatedHash, width / 2, 855);
+  ctx.restore();
 
-  // Generated date
-  const generatedDate = new Date(proof.generatedAt).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric'
-  });
-
-  ctx.fillStyle = '#52525b'; // zinc-600
-  ctx.font = '24px system-ui, -apple-system, sans-serif';
-  ctx.fillText(`Generated: ${generatedDate}`, width / 2, 940);
-
-  // Footer
-  ctx.fillStyle = '#3f3f46'; // zinc-700
-  ctx.font = '22px system-ui, -apple-system, sans-serif';
-  ctx.fillText('Privacy-preserving cryptographic verification', width / 2, 1000);
-
-  // Convert canvas to blob
-  return new Promise((resolve) => {
-    canvas.toBlob((blob) => {
-      resolve(blob);
-    }, 'image/png');
-  });
+  // Return canvas (caller will convert to blob if needed)
+  return canvas;
 }
 
 /**
@@ -823,37 +837,103 @@ async function shareProof(type, proof) {
     // Show loading notification
     showNotification('Generating proof card...', 'info');
 
-    // Generate PNG card
-    const blob = await generateProofCardImage(type, proof);
+    // Generate PNG card (returns canvas)
+    const canvas = await generateProofCardImage(type, proof);
 
-    // Try Web Share API first (mobile/modern browsers)
-    if (navigator.share && navigator.canShare && navigator.canShare({ files: [new File([blob], 'proof.png', { type: 'image/png' })] })) {
-      const file = new File([blob], 'zk-vault-proof.png', { type: 'image/png' });
+    // Show preview page with the canvas
+    const page = document.getElementById('share-preview-page');
+    const preview = document.getElementById('card-preview');
+    preview.innerHTML = '';
 
-      await navigator.share({
-        title: 'ZK Vault Proof',
-        text: 'My zero-knowledge proof from ZK Vault',
-        files: [file]
-      });
+    // Scale down the high-res canvas for display (maintains quality)
+    // Extension is 600px tall, minus header (52px) and buttons (64px) = 484px available
+    // Use 460px height to maximize space while leaving small margins
+    canvas.style.width = '345px';
+    canvas.style.height = '460px';
+    canvas.style.display = 'block';
+    canvas.style.borderRadius = '8px';
+    canvas.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.3)';
+    preview.appendChild(canvas);
 
-      showNotification('Proof card shared!', 'success');
-    } else {
-      // Fallback: Download the PNG
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `zk-vault-proof-${type}-${Date.now()}.png`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+    page.classList.remove('hidden');
 
-      showNotification('Proof card downloaded! You can now share it.', 'success');
-    }
+    // Store blob for share/download actions (max quality)
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png', 1.0));
+
+    // Setup event listeners for page buttons
+    setupSharePreviewPage(type, blob);
+
   } catch (error) {
-    console.error('Failed to share proof:', error);
-    showNotification('Failed to share proof card', 'error');
+    console.error('Failed to generate proof card:', error);
+    showNotification('Failed to generate proof card', 'error');
   }
+}
+
+/**
+ * Setup share preview page event listeners
+ */
+function setupSharePreviewPage(type, blob) {
+  const page = document.getElementById('share-preview-page');
+  const backBtn = document.getElementById('back-to-proofs');
+  const shareBtn = document.getElementById('share-card-btn');
+  const downloadBtn = document.getElementById('download-card-btn');
+
+  // Remove old listeners by cloning buttons
+  const newShareBtn = shareBtn.cloneNode(true);
+  const newDownloadBtn = downloadBtn.cloneNode(true);
+  const newBackBtn = backBtn.cloneNode(true);
+  shareBtn.replaceWith(newShareBtn);
+  downloadBtn.replaceWith(newDownloadBtn);
+  backBtn.replaceWith(newBackBtn);
+
+  // Close page (go back to proofs)
+  const closePage = () => {
+    page.classList.add('hidden');
+  };
+
+  newBackBtn.onclick = closePage;
+
+  // Share button
+  newShareBtn.onclick = async () => {
+    try {
+      // Try Web Share API first (mobile/modern browsers)
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [new File([blob], 'proof.png', { type: 'image/png' })] })) {
+        const file = new File([blob], 'zk-vault-proof.png', { type: 'image/png' });
+
+        await navigator.share({
+          title: 'ZK Vault Proof',
+          text: 'My zero-knowledge proof from ZK Vault',
+          files: [file]
+        });
+
+        closePage();
+        showNotification('Proof card shared!', 'success');
+      } else {
+        // Fallback message if Web Share API not available
+        showNotification('Share not available - use Download instead', 'info');
+      }
+    } catch (error) {
+      if (error.name !== 'AbortError') {
+        console.error('Share failed:', error);
+        showNotification('Failed to share', 'error');
+      }
+    }
+  };
+
+  // Download button
+  newDownloadBtn.onclick = () => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `zk-vault-proof-${type}-${Date.now()}.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    closePage();
+    showNotification('Proof card downloaded!', 'success');
+  };
 }
 
 /**
@@ -953,19 +1033,6 @@ async function deleteProof(type) {
   deleteModal.addEventListener('click', handleBackdropClick);
 }
 
-/**
- * Share a proof (copy to clipboard)
- */
-async function shareProof(type, proof) {
-  try {
-    const proofJson = JSON.stringify(proof, null, 2);
-    await navigator.clipboard.writeText(proofJson);
-    showNotification('Proof copied to clipboard!', 'success');
-  } catch (error) {
-    console.error('Error copying proof:', error);
-    showNotification('Failed to copy proof', 'error');
-  }
-}
 
 /**
  * Load and display permissions

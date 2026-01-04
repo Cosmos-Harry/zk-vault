@@ -34,7 +34,7 @@
       border: 2px solid #27272a;
       border-radius: 12px;
       overflow: hidden;
-      max-width: 540px;
+      max-width: 450px;
     }
     #preview canvas {
       width: 100%;
@@ -67,138 +67,129 @@
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
 
-      // Card dimensions (Instagram square post size)
-      const width = 1080;
-      const height = 1080;
+      // Card dimensions (600x800 - ZK Chat style)
+      const width = 600;
+      const height = 800;
       canvas.width = width;
       canvas.height = height;
 
-      // Background gradient
-      const gradient = ctx.createLinearGradient(0, 0, 0, height);
-      gradient.addColorStop(0, '#09090b'); // zinc-950
-      gradient.addColorStop(1, '#18181b'); // zinc-900
+      // Background: Dark gradient
+      const gradient = ctx.createLinearGradient(0, 0, width, height);
+      gradient.addColorStop(0, '#1a1a1a');
+      gradient.addColorStop(1, '#0a0a0a');
       ctx.fillStyle = gradient;
       ctx.fillRect(0, 0, width, height);
 
-      // Border
-      ctx.strokeStyle = '#27272a'; // zinc-800
-      ctx.lineWidth = 3;
-      ctx.strokeRect(30, 30, width - 60, height - 60);
+      // Rounded corners (clip the canvas)
+      ctx.save();
+      ctx.beginPath();
+      const cornerRadius = 24;
+      ctx.moveTo(cornerRadius, 0);
+      ctx.lineTo(width - cornerRadius, 0);
+      ctx.quadraticCurveTo(width, 0, width, cornerRadius);
+      ctx.lineTo(width, height - cornerRadius);
+      ctx.quadraticCurveTo(width, height, width - cornerRadius, height);
+      ctx.lineTo(cornerRadius, height);
+      ctx.quadraticCurveTo(0, height, 0, height - cornerRadius);
+      ctx.lineTo(0, cornerRadius);
+      ctx.quadraticCurveTo(0, 0, cornerRadius, 0);
+      ctx.closePath();
+      ctx.clip();
 
-      // Inner gradient accent border
-      const accentGradient = ctx.createLinearGradient(0, 0, width, height);
-      accentGradient.addColorStop(0, 'rgba(16, 185, 129, 0.3)'); // emerald-500/30
-      accentGradient.addColorStop(1, 'rgba(16, 185, 129, 0.1)'); // emerald-500/10
-      ctx.strokeStyle = accentGradient;
-      ctx.lineWidth = 2;
-      ctx.strokeRect(50, 50, width - 100, height - 100);
-
-      // ZK Vault Logo/Title
-      ctx.fillStyle = '#10b981'; // emerald-500
-      ctx.font = 'bold 48px system-ui, -apple-system, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('🔒 ZK Vault', width / 2, 140);
-
-      ctx.fillStyle = '#71717a'; // zinc-500
-      ctx.font = '28px system-ui, -apple-system, sans-serif';
-      ctx.fillText('Zero-Knowledge Proof', width / 2, 190);
+      // Re-fill background after clip
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, width, height);
 
       // Proof type specific content
       let mainText = '';
       let icon = '';
       let subtitle = '';
+      let privacyRevealed = '';
+      let privacyHidden = '';
 
       if (type === 'email_domain') {
         const domain = proof.publicInputs?.domain || 'unknown';
         mainText = `@${domain}`;
         icon = '📧';
         subtitle = 'Email Domain Verified';
+        privacyRevealed = `Domain: ${domain}`;
+        privacyHidden = 'Email address: HIDDEN';
       } else if (type === 'country') {
         const countryCode = proof.publicInputs?.countryCode || '??';
         const countryName = proof.publicInputs?.countryName || 'Unknown';
         mainText = countryName;
         icon = getCountryFlag(countryCode);
         subtitle = 'Country Verified';
+        privacyRevealed = `Country: ${countryName}`;
+        privacyHidden = 'IP address: HIDDEN';
       }
 
-      // Icon/Emoji
-      ctx.font = '180px system-ui, -apple-system, sans-serif';
+      // Icon/Emoji (large)
+      ctx.font = '80px system-ui, -apple-system, sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText(icon, width / 2, 420);
-
-      // Main text (domain or country)
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 72px system-ui, -apple-system, sans-serif';
-      ctx.fillText(mainText, width / 2, 550);
+      ctx.fillText(icon, width / 2, 140);
 
       // Subtitle
       ctx.fillStyle = '#10b981'; // emerald-500
-      ctx.font = '36px system-ui, -apple-system, sans-serif';
-      ctx.fillText(subtitle, width / 2, 610);
+      ctx.font = '18px system-ui, -apple-system, sans-serif';
+      ctx.fillText(subtitle, width / 2, 200);
 
-      // Verified checkmark badge
-      ctx.fillStyle = 'rgba(16, 185, 129, 0.15)'; // emerald bg
-      ctx.beginPath();
-      // Rounded rectangle (fallback for older browsers)
-      const x = width / 2 - 120;
-      const y = 660;
-      const w = 240;
-      const h = 60;
-      const r = 30;
-      if (ctx.roundRect) {
-        ctx.roundRect(x, y, w, h, r);
-      } else {
-        // Manual rounded rect
-        ctx.moveTo(x + r, y);
-        ctx.lineTo(x + w - r, y);
-        ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-        ctx.lineTo(x + w, y + h - r);
-        ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-        ctx.lineTo(x + r, y + h);
-        ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-        ctx.lineTo(x, y + r);
-        ctx.quadraticCurveTo(x, y, x + r, y);
-        ctx.closePath();
-      }
-      ctx.fill();
+      // Main text (domain or country)
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 36px system-ui, -apple-system, sans-serif';
+      ctx.fillText(mainText, width / 2, 260);
 
-      ctx.fillStyle = '#10b981';
-      ctx.font = 'bold 32px system-ui, -apple-system, sans-serif';
-      ctx.fillText('✓ Verified', width / 2, 700);
+      // Proof hash box (semi-transparent background)
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
+      ctx.fillRect(40, 300, width - 80, 140);
 
-      // Proof hash (truncated)
-      const fullHash = proof.data || '';
-      const truncatedHash = fullHash.length > 24
-        ? `${fullHash.substring(0, 12)}...${fullHash.substring(fullHash.length - 12)}`
-        : fullHash;
-
-      ctx.fillStyle = '#3f3f46'; // zinc-700
-      ctx.fillRect(120, 780, width - 240, 100);
-
+      // Proof hash label
       ctx.fillStyle = '#71717a'; // zinc-500
-      ctx.font = '20px monospace';
+      ctx.font = '14px system-ui, -apple-system, sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('PROOF HASH', width / 2, 815);
+      ctx.fillText('CRYPTOGRAPHIC PROOF', width / 2, 330);
+
+      // Proof hash (word-wrapped)
+      const fullHash = proof.data || '';
+      const hashChunkSize = 32;
+      const hashLines = [];
+      for (let i = 0; i < fullHash.length; i += hashChunkSize) {
+        hashLines.push(fullHash.substring(i, i + hashChunkSize));
+      }
 
       ctx.fillStyle = '#10b981'; // emerald-500
-      ctx.font = 'bold 24px monospace';
-      ctx.fillText(truncatedHash, width / 2, 855);
+      ctx.font = '12px monospace';
+      ctx.textAlign = 'center';
+      let hashY = 360;
+      for (let i = 0; i < Math.min(hashLines.length, 3); i++) {
+        ctx.fillText(hashLines[i], width / 2, hashY);
+        hashY += 20;
+      }
 
-      // Generated date
-      const generatedDate = new Date(proof.generatedAt).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric'
-      });
-
+      // Privacy info
       ctx.fillStyle = '#52525b'; // zinc-600
-      ctx.font = '24px system-ui, -apple-system, sans-serif';
-      ctx.fillText(`Generated: ${generatedDate}`, width / 2, 940);
+      ctx.font = '14px system-ui, -apple-system, sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText('✓ Revealed:', 60, 500);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText(privacyRevealed, 60, 525);
+
+      ctx.fillStyle = '#52525b';
+      ctx.fillText('🔒 Hidden:', 60, 570);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText(privacyHidden, 60, 595);
 
       // Footer
       ctx.fillStyle = '#3f3f46'; // zinc-700
-      ctx.font = '22px system-ui, -apple-system, sans-serif';
-      ctx.fillText('Privacy-preserving cryptographic verification', width / 2, 1000);
+      ctx.font = '16px system-ui, -apple-system, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('ZK Vault', width / 2, 720);
+
+      ctx.fillStyle = '#52525b'; // zinc-600
+      ctx.font = '12px system-ui, -apple-system, sans-serif';
+      ctx.fillText('Prove Anything, Reveal Nothing', width / 2, 745);
+
+      ctx.restore();
 
       return canvas;
     }
