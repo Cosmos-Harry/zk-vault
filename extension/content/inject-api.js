@@ -14,27 +14,46 @@
   window.zkVault = {
     /**
      * Request a proof from the vault
-     * @param {string} proofType - Type of proof ('email_domain', 'country', 'age')
-     * @returns {Promise<Object>} The proof object or null if denied
+     * @param {string|Object} options - Proof type string OR config object {type, autoRegister, backendUrl}
+     * @returns {Promise<Object>} The proof object (and registration if autoRegister=true) or error
      */
-    requestProof: async function(proofType) {
-      console.log('[ZK Vault] Proof requested:', proofType);
+    requestProof: async function(options) {
+      // Normalize options (backward compatible with string parameter)
+      const config = typeof options === 'string'
+        ? { type: options }
+        : options;
+
+      // Validate config
+      if (!config.type) {
+        throw new Error('Proof type is required');
+      }
+
+      if (config.autoRegister && !config.backendUrl) {
+        throw new Error('backendUrl is required when autoRegister=true');
+      }
+
+      console.log('[ZK Vault] Proof requested:', config);
 
       try {
         const response = await chrome.runtime.sendMessage({
           action: 'requestProof',
-          proofType: proofType
+          requestId: crypto.randomUUID(),
+          proofType: config.type,
+          origin: window.location.origin,
+          autoRegister: config.autoRegister || false,
+          backendUrl: config.backendUrl || null,
+          permissionMessage: config.permissionMessage || null,
+          timestamp: Date.now()
         });
 
         if (response.error) {
-          console.error('[ZK Vault] Error:', response.error);
-          return null;
+          throw new Error(response.error);
         }
 
-        return response.proof;
+        return response;  // {success, proof, registration?}
       } catch (error) {
         console.error('[ZK Vault] Request failed:', error);
-        return null;
+        throw error;
       }
     },
 
@@ -51,7 +70,7 @@
      * @returns {string} Version string
      */
     getVersion: function() {
-      return '0.1.0';
+      return '0.1.3';
     },
 
     /**
@@ -86,7 +105,7 @@
 
   // Dispatch event to notify page that zkVault is ready
   window.dispatchEvent(new CustomEvent('zkVaultReady', {
-    detail: { version: '0.1.0' }
+    detail: { version: '0.1.3' }
   }));
 
   console.log('[ZK Vault] API injected successfully');

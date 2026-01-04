@@ -19,6 +19,9 @@ import { parseEmail, clearSensitiveData } from '../lib/email-parser.js';
 // WASM initialization state
 let wasmInitialized = false;
 
+// Pending proof requests from websites (runtime only)
+const pendingRequests = new Map();
+
 // Storage keys
 const STORAGE_KEYS = {
   PROOFS: 'zk_vault_proofs',
@@ -124,40 +127,50 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       handleGrantPermission(request, sendResponse);
       return true; // Async response
 
+    case 'getPendingRequest':
+      handleGetPendingRequest(request, sendResponse);
+      return true; // Async response
+
+    case 'approveProofRequest':
+      handleApproveProofRequest(request, sendResponse);
+      return true; // Async response
+
+    case 'denyProofRequest':
+      handleDenyProofRequest(request, sendResponse);
+      return true; // Async response
+
     default:
       sendResponse({ error: 'Unknown action' });
   }
 });
 
 /**
- * Handle proof request from website
+ * Handle proof request from website (WALLET-LIKE FLOW)
  */
 async function handleProofRequest(request, sender, sendResponse) {
   try {
-    const { proofType } = request;
+    const { requestId, proofType, autoRegister, backendUrl } = request;
     const origin = sender.url ? new URL(sender.url).origin : 'unknown';
 
-    console.log(`Proof request from ${origin} for ${proofType}`);
+    console.log(`[ZK Vault] Proof request from ${origin} for ${proofType}`);
+    console.log(`[ZK Vault] Request ID: ${requestId}`);
+    console.log(`[ZK Vault] Auto-register: ${autoRegister}`);
 
     // Get existing proofs
     const { [STORAGE_KEYS.PROOFS]: proofs } = await chrome.storage.local.get(STORAGE_KEYS.PROOFS);
+    const proof = proofs[proofType];
 
-    // Check if proof exists
-    if (!proofs[proofType]) {
-      sendResponse({
-        error: 'Proof not found',
-        message: `Please generate a ${proofType} proof first`
-      });
+    // CASE C: Proof doesn't exist → Open generation popup
+    if (!proof) {
+      console.log(`[ZK Vault] Proof doesn't exist, opening generation popup`);
+      await openGenerationPopup(requestId, origin, proofType, autoRegister, backendUrl, sendResponse);
       return;
     }
 
     // Check if proof is expired
-    const proof = proofs[proofType];
     if (proof.expiresAt && Date.now() > proof.expiresAt) {
-      sendResponse({
-        error: 'Proof expired',
-        message: 'Please regenerate this proof'
-      });
+      console.log(`[ZK Vault] Proof expired, opening generation popup`);
+      await openGenerationPopup(requestId, origin, proofType, autoRegister, backendUrl, sendResponse);
       return;
     }
 
@@ -165,72 +178,285 @@ async function handleProofRequest(request, sender, sendResponse) {
     const { [STORAGE_KEYS.PERMISSIONS]: permissions } = await chrome.storage.local.get(STORAGE_KEYS.PERMISSIONS);
     const hasPermission = permissions[origin]?.[proofType];
 
+    // CASE B: Proof exists but no permission → Open permission popup
     if (!hasPermission) {
-      // Request user permission via notification
-      const granted = await requestUserPermission(origin, proofType, proof);
-
-      if (!granted) {
-        sendResponse({ error: 'Permission denied by user' });
-        return;
-      }
-
-      // Save permission
-      if (!permissions[origin]) permissions[origin] = {};
-      permissions[origin][proofType] = true;
-      await chrome.storage.local.set({ [STORAGE_KEYS.PERMISSIONS]: permissions });
+      console.log(`[ZK Vault] Permission not granted, opening permission popup`);
+      await openPermissionPopup(requestId, origin, proofType, proof, autoRegister, backendUrl, sendResponse);
+      return;
     }
 
-    // Return proof (without private data)
-    sendResponse({
-      success: true,
-      proof: {
-        type: proof.type,
-        data: proof.data,
-        publicInputs: proof.publicInputs,
-        generatedAt: proof.generatedAt,
-        expiresAt: proof.expiresAt
-      }
-    });
+    // CASE A: Proof exists + permission granted → Auto-return with optional auto-registration
+    console.log(`[ZK Vault] Permission granted, auto-returning proof`);
+    await returnProofWithRegistration(proof, autoRegister, backendUrl, sendResponse);
 
   } catch (error) {
-    console.error('Error handling proof request:', error);
+    console.error('[ZK Vault] Error handling proof request:', error);
     sendResponse({ error: error.message });
   }
 }
 
 /**
- * Request user permission to share proof
+ * Open permission request popup
  */
-async function requestUserPermission(origin, proofType, proof) {
-  return new Promise((resolve) => {
-    // Create notification
-    chrome.notifications.create({
-      type: 'basic',
-      iconUrl: '../icons/icon-128.png',
-      title: 'ZK Vault Permission Request',
-      message: `${origin} wants to verify your ${proofType} proof.\n\nThis will reveal: ${getProofDescription(proofType, proof)}`,
-      buttons: [
-        { title: 'Allow' },
-        { title: 'Deny' }
-      ],
-      requireInteraction: true
-    }, (notificationId) => {
-      // Handle button click
-      chrome.notifications.onButtonClicked.addListener((clickedId, buttonIndex) => {
-        if (clickedId === notificationId) {
-          chrome.notifications.clear(notificationId);
-          resolve(buttonIndex === 0); // 0 = Allow, 1 = Deny
-        }
-      });
-
-      // Handle close
-      chrome.notifications.onClosed.addListener((closedId) => {
-        if (closedId === notificationId) {
-          resolve(false); // Treat close as deny
-        }
-      });
-    });
+async function openPermissionPopup(requestId, origin, proofType, proof, autoRegister, backendUrl, sendResponse) {
+  // Store pending request
+  pendingRequests.set(requestId, {
+    requestId,
+    origin,
+    proofType,
+    proof,
+    autoRegister,
+    backendUrl,
+    sendResponse
   });
+
+  // Open popup window
+  const popup = await chrome.windows.create({
+    url: `popup/popup.html?mode=permission&requestId=${requestId}`,
+    type: 'popup',
+    width: 400,
+    height: 600
+  });
+
+  console.log(`[ZK Vault] Permission popup opened: ${popup.id}`);
+}
+
+/**
+ * Open generation request popup
+ */
+async function openGenerationPopup(requestId, origin, proofType, autoRegister, backendUrl, sendResponse) {
+  // Store pending request
+  pendingRequests.set(requestId, {
+    requestId,
+    origin,
+    proofType,
+    autoRegister,
+    backendUrl,
+    sendResponse
+  });
+
+  // Open popup window
+  const popup = await chrome.windows.create({
+    url: `popup/popup.html?mode=generate&requestId=${requestId}`,
+    type: 'popup',
+    width: 400,
+    height: 600
+  });
+
+  console.log(`[ZK Vault] Generation popup opened: ${popup.id}`);
+}
+
+/**
+ * Return proof with optional auto-registration
+ */
+async function returnProofWithRegistration(proof, autoRegister, backendUrl, sendResponse) {
+  let registration = null;
+
+  // Perform auto-registration if requested
+  if (autoRegister && backendUrl) {
+    try {
+      registration = await performAutoRegistration(proof, backendUrl);
+      console.log(`[ZK Vault] Auto-registration successful:`, registration);
+    } catch (error) {
+      console.error('[ZK Vault] Auto-registration failed:', error);
+      // Continue anyway, return proof without registration
+    }
+  }
+
+  // Return proof (without private data)
+  sendResponse({
+    success: true,
+    proof: {
+      type: proof.type,
+      data: proof.data,
+      publicInputs: proof.publicInputs,
+      generatedAt: proof.generatedAt,
+      expiresAt: proof.expiresAt
+    },
+    registration: registration
+  });
+}
+
+/**
+ * Perform auto-registration with backend
+ */
+async function performAutoRegistration(proof, backendUrl) {
+  console.log(`[ZK Vault] Auto-registering with ${backendUrl}`);
+
+  // Validate backend URL (must be HTTPS and not obviously malicious)
+  try {
+    const url = new URL(backendUrl);
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+      throw new Error('Invalid backend URL protocol');
+    }
+  } catch (error) {
+    throw new Error('Invalid backend URL: ' + error.message);
+  }
+
+  // Build registration payload
+  const payload = buildRegistrationPayload(proof);
+
+  // Make registration request
+  const response = await fetch(backendUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    throw new Error(`Registration failed: HTTP ${response.status}`);
+  }
+
+  const result = await response.json();
+
+  if (!result.success) {
+    throw new Error(result.error || 'Registration failed');
+  }
+
+  return {
+    token: result.token,
+    pseudonym: result.pseudonym,
+    userId: result.userId,
+    badges: result.badges
+  };
+}
+
+/**
+ * Build registration payload for backend
+ */
+function buildRegistrationPayload(proof) {
+  if (proof.type === PROOF_TYPES.COUNTRY) {
+    return {
+      countryProof: {
+        identityHash: proof.publicInputs.commitment, // Stable identity
+        proofHash: generateProofHash(proof), // Unique nullifier
+        code: proof.publicInputs.countryCode,
+        flag: getCountryFlag(proof.publicInputs.countryCode),
+        name: proof.publicInputs.countryName
+      }
+    };
+  } else if (proof.type === PROOF_TYPES.EMAIL_DOMAIN) {
+    return {
+      emailProof: {
+        identityHash: proof.publicInputs.commitment,
+        proofHash: generateProofHash(proof),
+        domain: proof.publicInputs.domain
+      }
+    };
+  }
+
+  throw new Error('Unsupported proof type for registration');
+}
+
+/**
+ * Generate unique proof hash for nullifier
+ */
+function generateProofHash(proof) {
+  // Combine proof data with timestamp for uniqueness
+  const uniqueString = proof.data + Date.now() + Math.random();
+  return hashString(uniqueString);
+}
+
+/**
+ * Get country flag emoji
+ */
+function getCountryFlag(countryCode) {
+  // Convert country code to flag emoji (e.g., "US" → "🇺🇸")
+  const codePoints = countryCode
+    .toUpperCase()
+    .split('')
+    .map(char => 127397 + char.charCodeAt(0));
+  return String.fromCodePoint(...codePoints);
+}
+
+/**
+ * Get pending request (called by popup)
+ */
+async function handleGetPendingRequest(request, sendResponse) {
+  const { requestId } = request;
+  const pendingRequest = pendingRequests.get(requestId);
+
+  if (!pendingRequest) {
+    sendResponse({ error: 'Request not found' });
+    return;
+  }
+
+  sendResponse({
+    success: true,
+    request: {
+      requestId: pendingRequest.requestId,
+      origin: pendingRequest.origin,
+      proofType: pendingRequest.proofType,
+      proof: pendingRequest.proof,
+      autoRegister: pendingRequest.autoRegister
+    }
+  });
+}
+
+/**
+ * Approve proof request (called by popup)
+ */
+async function handleApproveProofRequest(request, sendResponse) {
+  const { requestId, grantPermission } = request;
+  const pendingRequest = pendingRequests.get(requestId);
+
+  if (!pendingRequest) {
+    sendResponse({ error: 'Request not found' });
+    return;
+  }
+
+  try {
+    // Grant permission if requested
+    if (grantPermission) {
+      const { [STORAGE_KEYS.PERMISSIONS]: permissions } = await chrome.storage.local.get(STORAGE_KEYS.PERMISSIONS);
+      if (!permissions[pendingRequest.origin]) {
+        permissions[pendingRequest.origin] = {};
+      }
+      permissions[pendingRequest.origin][pendingRequest.proofType] = true;
+      await chrome.storage.local.set({ [STORAGE_KEYS.PERMISSIONS]: permissions });
+      console.log(`[ZK Vault] Permission granted for ${pendingRequest.origin} → ${pendingRequest.proofType}`);
+    }
+
+    // Return proof with optional auto-registration
+    await returnProofWithRegistration(
+      pendingRequest.proof,
+      pendingRequest.autoRegister,
+      pendingRequest.backendUrl,
+      pendingRequest.sendResponse
+    );
+
+    // Clean up
+    pendingRequests.delete(requestId);
+    sendResponse({ success: true });
+
+  } catch (error) {
+    console.error('[ZK Vault] Error approving request:', error);
+    sendResponse({ error: error.message });
+  }
+}
+
+/**
+ * Deny proof request (called by popup)
+ */
+async function handleDenyProofRequest(request, sendResponse) {
+  const { requestId } = request;
+  const pendingRequest = pendingRequests.get(requestId);
+
+  if (!pendingRequest) {
+    sendResponse({ error: 'Request not found' });
+    return;
+  }
+
+  // Reject the original request
+  pendingRequest.sendResponse({
+    error: 'Permission denied by user'
+  });
+
+  // Clean up
+  pendingRequests.delete(requestId);
+  sendResponse({ success: true });
 }
 
 /**
