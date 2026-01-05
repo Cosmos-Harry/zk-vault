@@ -609,7 +609,6 @@ async function generateEmailDomainProof(privateData) {
 
     console.log('[ZK Vault] ✓ Email parsed successfully');
     console.log('[ZK Vault] Domain:', domain);
-    console.log('[ZK Vault] DKIM signature length:', dkimSignature.length, 'chars');
 
     // CRITICAL: Clear raw email from memory immediately after parsing
     rawEmail = null;

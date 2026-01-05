@@ -19,21 +19,19 @@ export function parseEmail(rawEmail) {
     throw new Error('Invalid email format: Email must be a non-empty string');
   }
 
-  console.log('[Email Parser] Email length:', rawEmail.length, 'chars');
-  console.log('[Email Parser] First 200 chars:', rawEmail.substring(0, 200));
+  console.log('[Email Parser] Processing email...');
 
   const headers = parseEmailHeaders(rawEmail);
-  console.log('[Email Parser] Headers length:', headers.length, 'chars');
 
   try {
     const domain = extractDomain(headers);
     console.log('[Email Parser] Extracted domain:', domain);
 
     const dkimSignature = extractDKIMSignature(headers);
-    console.log('[Email Parser] DKIM signature length:', dkimSignature.length, 'chars');
+    console.log('[Email Parser] DKIM signature extracted');
 
     const authResults = extractAuthResults(headers);
-    console.log('[Email Parser] Auth results length:', authResults.length, 'chars');
+    console.log('[Email Parser] Auth results extracted');
 
     // Validate DKIM structure before returning
     validateDKIMStructure(dkimSignature);
