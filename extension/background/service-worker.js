@@ -139,6 +139,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       handleDenyProofRequest(request, sendResponse);
       return true; // Async response
 
+    case 'updatePendingRequestProof':
+      handleUpdatePendingRequestProof(request, sendResponse);
+      return true; // Async response
+
     default:
       sendResponse({ error: 'Unknown action' });
   }
@@ -210,12 +214,16 @@ async function openPermissionPopup(requestId, origin, proofType, proof, autoRegi
     sendResponse
   });
 
-  // Open popup window
+  // Position popup on right side (wallet-like)
+  const popupWidth = 400;
+  const popupHeight = 600;
+
+  // Open popup window (Chrome will position it, we can't control left/top in Manifest V3)
   const popup = await chrome.windows.create({
     url: `popup/popup.html?mode=permission&requestId=${requestId}`,
     type: 'popup',
-    width: 400,
-    height: 600
+    width: popupWidth,
+    height: popupHeight
   });
 
   console.log(`[ZK Vault] Permission popup opened: ${popup.id}`);
@@ -294,9 +302,11 @@ async function performAutoRegistration(proof, backendUrl) {
   }
 
   // Build registration payload
-  const payload = buildRegistrationPayload(proof);
+  const payload = await buildRegistrationPayload(proof);
 
   // Make registration request
+  console.log('[ZK Vault] Sending registration payload:', JSON.stringify(payload, null, 2));
+
   const response = await fetch(backendUrl, {
     method: 'POST',
     headers: {
@@ -305,33 +315,53 @@ async function performAutoRegistration(proof, backendUrl) {
     body: JSON.stringify(payload)
   });
 
+  console.log('[ZK Vault] Backend response status:', response.status);
+
   if (!response.ok) {
-    throw new Error(`Registration failed: HTTP ${response.status}`);
+    // Try to get error details from response body
+    let errorMessage = `HTTP ${response.status}`;
+    try {
+      const errorBody = await response.json();
+      console.error('[ZK Vault] Backend error response:', errorBody);
+      errorMessage = errorBody.error || errorMessage;
+    } catch (e) {
+      console.error('[ZK Vault] Could not parse error response');
+    }
+    throw new Error(`Registration failed: ${errorMessage}`);
   }
 
   const result = await response.json();
 
-  if (!result.success) {
-    throw new Error(result.error || 'Registration failed');
+  console.log('[ZK Vault] Registration result from backend:', result);
+
+  // Backend returns {user, token} directly (no success field)
+  if (!result.user || !result.token) {
+    throw new Error(result.error || 'Registration failed: missing user or token');
   }
 
+  // Return in the format ZK Chat expects: {user, token}
   return {
-    token: result.token,
-    pseudonym: result.pseudonym,
-    userId: result.userId,
-    badges: result.badges
+    user: result.user,
+    token: result.token
   };
 }
 
 /**
- * Build registration payload for backend
+ * Build registration payload for backend (async)
  */
-function buildRegistrationPayload(proof) {
+async function buildRegistrationPayload(proof) {
+  console.log('[ZK Vault] Building registration payload for proof:', proof);
+
+  if (!proof || !proof.type) {
+    console.error('[ZK Vault] Invalid proof structure:', proof);
+    throw new Error('Invalid proof structure: missing type');
+  }
+
   if (proof.type === PROOF_TYPES.COUNTRY) {
     return {
       countryProof: {
         identityHash: proof.publicInputs.commitment, // Stable identity
-        proofHash: generateProofHash(proof), // Unique nullifier
+        proofHash: await generateProofHash(proof), // Unique nullifier
         code: proof.publicInputs.countryCode,
         flag: getCountryFlag(proof.publicInputs.countryCode),
         name: proof.publicInputs.countryName
@@ -341,22 +371,22 @@ function buildRegistrationPayload(proof) {
     return {
       emailProof: {
         identityHash: proof.publicInputs.commitment,
-        proofHash: generateProofHash(proof),
+        proofHash: await generateProofHash(proof),
         domain: proof.publicInputs.domain
       }
     };
   }
 
-  throw new Error('Unsupported proof type for registration');
+  throw new Error('Unsupported proof type for registration: ' + proof.type);
 }
 
 /**
- * Generate unique proof hash for nullifier
+ * Generate unique proof hash for nullifier (async)
  */
-function generateProofHash(proof) {
+async function generateProofHash(proof) {
   // Combine proof data with timestamp for uniqueness
   const uniqueString = proof.data + Date.now() + Math.random();
-  return hashString(uniqueString);
+  return await hashString(uniqueString);
 }
 
 /**
@@ -456,6 +486,26 @@ async function handleDenyProofRequest(request, sendResponse) {
 
   // Clean up
   pendingRequests.delete(requestId);
+  sendResponse({ success: true });
+}
+
+/**
+ * Update pending request with newly generated proof (called by popup after generation)
+ */
+async function handleUpdatePendingRequestProof(request, sendResponse) {
+  const { requestId, proof } = request;
+  const pendingRequest = pendingRequests.get(requestId);
+
+  if (!pendingRequest) {
+    sendResponse({ error: 'Request not found' });
+    return;
+  }
+
+  // Update the pending request with the generated proof
+  pendingRequest.proof = proof;
+  pendingRequests.set(requestId, pendingRequest);
+
+  console.log(`[ZK Vault] Updated pending request ${requestId} with generated proof`);
   sendResponse({ success: true });
 }
 
@@ -792,16 +842,14 @@ async function handleGrantPermission(request, sendResponse) {
 }
 
 /**
- * Simple hash function (replace with proper crypto later)
+ * SHA-256 hash function (returns 64 hex characters)
  */
-function hashString(str) {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash;
-  }
-  return Math.abs(hash).toString(16);
+async function hashString(str) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(str);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
 console.log('ZK Vault service worker loaded');

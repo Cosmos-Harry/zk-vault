@@ -70,6 +70,23 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Load and display permissions
   await loadPermissions();
+
+  // Check if we should auto-open a proof generation form
+  const tab = params.get('tab');
+  const generate = params.get('generate');
+
+  if (tab === 'proofs' && generate === 'email_domain') {
+    // Switch to proofs tab
+    document.querySelector('[data-tab="proofs"]').click();
+
+    // Auto-open email domain generation modal
+    setTimeout(() => {
+      const emailButton = document.querySelector('[data-proof-type="email_domain"]');
+      if (emailButton) {
+        emailButton.click();
+      }
+    }, 100);
+  }
 });
 
 /**
@@ -248,11 +265,39 @@ async function handleEmailProofGeneration(file) {
         if (progressBar) progressBar.style.width = '100%';
         if (progressText) progressText.textContent = '✓ Proof generated!';
 
-        setTimeout(() => {
-          closeGenerateModal();
-          loadProofs();
-          showNotification('Email domain proof generated!', 'success');
-        }, 1000);
+        // Check if this is from a website request
+        const pendingRequestId = sessionStorage.getItem('pendingRequestId');
+
+        if (pendingRequestId) {
+          // Update the pending request with the generated proof
+          await chrome.runtime.sendMessage({
+            action: 'updatePendingRequestProof',
+            requestId: pendingRequestId,
+            proof: response.proof
+          });
+
+          // Auto-grant permission to requesting origin and return proof
+          await chrome.runtime.sendMessage({
+            action: 'approveProofRequest',
+            requestId: pendingRequestId,
+            grantPermission: true
+          });
+
+          // Clear the pending request ID
+          sessionStorage.removeItem('pendingRequestId');
+
+          // Close the popup window (will return to website)
+          setTimeout(() => {
+            window.close();
+          }, 1000);
+        } else {
+          // Normal flow: just close modal and reload proofs
+          setTimeout(() => {
+            closeGenerateModal();
+            loadProofs();
+            showNotification('Email domain proof generated!', 'success');
+          }, 1000);
+        }
       }
     } catch (error) {
       clearInterval(interval);
@@ -1228,80 +1273,81 @@ async function showPermissionRequestPage(requestId) {
   }
 
   // Replace entire body with permission request UI
+  document.body.className = 'w-[400px] h-[600px] bg-zinc-950 text-white font-mono';
   document.body.innerHTML = `
-    <div class="w-[400px] h-[600px] bg-zinc-950 text-white flex flex-col">
+    <div class="w-full h-full flex flex-col">
       <!-- Header -->
-      <div class="px-6 py-4 border-b border-zinc-800">
-        <div class="flex items-center gap-3 mb-3">
-          <div class="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" class="text-emerald-500">
+      <div class="px-4 py-4 border-b border-zinc-800 bg-zinc-950">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" class="text-emerald-500">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
             </svg>
           </div>
           <div>
-            <h1 class="text-base font-bold text-emerald-500">Permission Request</h1>
-            <p class="text-xs text-zinc-400">ZK Vault</p>
+            <h1 class="text-sm font-bold text-emerald-500">ZK Vault</h1>
+            <p class="text-[10px] text-zinc-500">Permission Request</p>
           </div>
         </div>
       </div>
 
       <!-- Content -->
-      <div class="flex-1 overflow-y-auto px-6 py-6">
+      <div class="flex-1 overflow-y-auto px-4 py-5 pb-28 bg-zinc-950">
         <!-- Origin -->
-        <div class="mb-6">
-          <div class="flex items-center gap-3 mb-3">
-            <div class="w-12 h-12 rounded-full bg-zinc-800 flex items-center justify-center">
-              <svg class="w-6 h-6 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div class="mb-5">
+          <div class="flex items-center gap-2 mb-3 p-3 bg-zinc-900 border border-zinc-800 rounded-lg">
+            <div class="w-10 h-10 rounded-lg bg-zinc-800 flex items-center justify-center flex-shrink-0">
+              <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/>
               </svg>
             </div>
-            <div class="flex-1">
-              <div class="text-sm font-semibold text-white mb-1">${domain}</div>
-              <div class="text-xs text-zinc-400">${origin}</div>
+            <div class="flex-1 min-w-0">
+              <div class="text-xs font-bold text-white mb-0.5 truncate">${domain}</div>
+              <div class="text-[10px] text-zinc-500 truncate">${origin}</div>
             </div>
           </div>
-          <p class="text-sm text-zinc-300">
-            This site is requesting access to your <strong class="text-white">${proofType.replace('_', ' ')}</strong> proof.
+          <p class="text-xs text-zinc-400 leading-relaxed">
+            Requests access to your <span class="text-emerald-400 font-semibold">${proofType.replace('_', ' ')}</span> proof
           </p>
         </div>
 
         <!-- What will be revealed -->
-        <div class="mb-6 p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
-          <div class="flex items-start gap-2 mb-2">
-            <svg class="w-5 h-5 text-emerald-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div class="mb-4 p-3 bg-zinc-900 border border-zinc-800 rounded-lg">
+          <div class="flex items-start gap-2">
+            <svg class="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
             </svg>
-            <div>
-              <p class="text-sm font-semibold text-emerald-300 mb-1">This will reveal:</p>
-              <p class="text-xs text-emerald-200">${revealInfo}</p>
+            <div class="flex-1">
+              <p class="text-xs font-bold text-emerald-400 mb-1">Will Reveal</p>
+              <p class="text-[11px] text-zinc-300 leading-relaxed">${proofDescription}</p>
             </div>
           </div>
         </div>
 
         <!-- What stays hidden -->
-        <div class="mb-6 p-4 bg-zinc-800/50 border border-zinc-700 rounded-lg">
+        <div class="mb-4 p-3 bg-zinc-900 border border-zinc-800 rounded-lg">
           <div class="flex items-start gap-2">
-            <svg class="w-5 h-5 text-zinc-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg class="w-4 h-4 text-zinc-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
             </svg>
-            <div>
-              <p class="text-sm font-semibold text-zinc-300 mb-1">Stays private:</p>
-              <p class="text-xs text-zinc-400">
-                ${proofType === 'country' ? 'IP address, city, exact location, and all other personal data' : 'Full email address, name, and all other personal data'}
+            <div class="flex-1">
+              <p class="text-xs font-bold text-zinc-400 mb-1">Stays Private</p>
+              <p class="text-[11px] text-zinc-500 leading-relaxed">
+                ${proofType === 'country' ? 'IP, city, location & personal data' : 'Full email, name & personal data'}
               </p>
             </div>
           </div>
         </div>
 
         ${autoRegister ? `
-          <div class="mb-6 p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+          <div class="p-3 bg-zinc-900 border border-zinc-800 rounded-lg">
             <div class="flex items-start gap-2">
-              <svg class="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg class="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
               </svg>
-              <div>
-                <p class="text-xs text-blue-200">
-                  After approval, you'll be automatically registered with ${domain}
+              <div class="flex-1">
+                <p class="text-[11px] text-zinc-400 leading-relaxed">
+                  Auto-register with <span class="text-emerald-400">${domain}</span> after approval
                 </p>
               </div>
             </div>
@@ -1309,15 +1355,15 @@ async function showPermissionRequestPage(requestId) {
         ` : ''}
       </div>
 
-      <!-- Action buttons -->
-      <div class="px-6 py-4 border-t border-zinc-800 space-y-2">
-        <button id="allow-btn" class="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-2">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <!-- Action buttons (fixed footer) -->
+      <div class="absolute bottom-0 left-0 right-0 px-4 py-4 border-t border-zinc-800 bg-zinc-950 space-y-2">
+        <button id="allow-btn" class="w-full py-2.5 bg-emerald-500 hover:bg-emerald-600 text-zinc-950 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
           </svg>
           Allow
         </button>
-        <button id="deny-btn" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-sm font-semibold transition-colors">
+        <button id="deny-btn" class="w-full py-2.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-400 rounded-lg text-xs font-semibold transition-colors">
           Deny
         </button>
       </div>
@@ -1376,67 +1422,68 @@ async function showGenerateRequestPage(requestId) {
   const domain = new URL(origin).hostname;
 
   // Replace entire body with generation request UI
+  document.body.className = 'w-[400px] h-[600px] bg-zinc-950 text-white font-mono';
   document.body.innerHTML = `
-    <div class="w-[400px] h-[600px] bg-zinc-950 text-white flex flex-col">
+    <div class="w-full h-full flex flex-col">
       <!-- Header -->
-      <div class="px-6 py-4 border-b border-zinc-800">
-        <div class="flex items-center gap-3 mb-3">
-          <div class="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" class="text-emerald-500">
+      <div class="px-4 py-4 border-b border-zinc-800 bg-zinc-950">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" class="text-emerald-500">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
             </svg>
           </div>
           <div>
-            <h1 class="text-base font-bold text-emerald-500">Proof Request</h1>
-            <p class="text-xs text-zinc-400">ZK Vault</p>
+            <h1 class="text-sm font-bold text-emerald-500">ZK Vault</h1>
+            <p class="text-[10px] text-zinc-500">Generate Proof</p>
           </div>
         </div>
       </div>
 
       <!-- Content -->
-      <div class="flex-1 overflow-y-auto px-6 py-6">
+      <div class="flex-1 overflow-y-auto px-4 py-5 pb-28 bg-zinc-950">
         <!-- Origin -->
-        <div class="mb-6">
-          <div class="flex items-center gap-3 mb-3">
-            <div class="w-12 h-12 rounded-full bg-zinc-800 flex items-center justify-center">
-              <svg class="w-6 h-6 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/>
+        <div class="mb-5">
+          <div class="flex items-center gap-2 mb-3 p-3 bg-zinc-900 border border-zinc-800 rounded-lg">
+            <div class="w-10 h-10 rounded-lg bg-zinc-800 flex items-center justify-center flex-shrink-0">
+              <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 119-9"/>
               </svg>
             </div>
-            <div class="flex-1">
-              <div class="text-sm font-semibold text-white mb-1">${domain}</div>
-              <div class="text-xs text-zinc-400">${origin}</div>
+            <div class="flex-1 min-w-0">
+              <div class="text-xs font-bold text-white mb-0.5 truncate">${domain}</div>
+              <div class="text-[10px] text-zinc-500 truncate">${origin}</div>
             </div>
           </div>
-          <p class="text-sm text-zinc-300">
-            This site requires a <strong class="text-white">${proofType.replace('_', ' ')}</strong> proof.
+          <p class="text-xs text-zinc-400 leading-relaxed">
+            Requires <span class="text-emerald-400 font-semibold">${proofType.replace('_', ' ')}</span> proof
           </p>
         </div>
 
-        <!-- Info box -->
-        <div class="mb-6 p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
+        <!-- Proof not found warning -->
+        <div class="mb-4 p-3 bg-zinc-900 border border-zinc-800 rounded-lg">
           <div class="flex items-start gap-2">
-            <svg class="w-5 h-5 text-yellow-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg class="w-4 h-4 text-zinc-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
             </svg>
-            <div>
-              <p class="text-sm font-semibold text-yellow-300 mb-1">Proof Not Found</p>
-              <p class="text-xs text-yellow-200">
-                You don't have a ${proofType.replace('_', ' ')} proof yet. Generate one now to continue.
+            <div class="flex-1">
+              <p class="text-xs font-bold text-zinc-400 mb-1">Proof Not Found</p>
+              <p class="text-[11px] text-zinc-500 leading-relaxed">
+                Generate ${proofType.replace('_', ' ')} proof to continue
               </p>
             </div>
           </div>
         </div>
 
         ${autoRegister ? `
-          <div class="mb-6 p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+          <div class="mb-4 p-3 bg-zinc-900 border border-zinc-800 rounded-lg">
             <div class="flex items-start gap-2">
-              <svg class="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg class="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
               </svg>
-              <div>
-                <p class="text-xs text-blue-200">
-                  After generation, you'll be automatically registered with ${domain}
+              <div class="flex-1">
+                <p class="text-[11px] text-zinc-400 leading-relaxed">
+                  Auto-register with <span class="text-emerald-400">${domain}</span> after generation
                 </p>
               </div>
             </div>
@@ -1444,30 +1491,30 @@ async function showGenerateRequestPage(requestId) {
         ` : ''}
 
         <!-- Privacy info -->
-        <div class="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
+        <div class="p-3 bg-zinc-900 border border-zinc-800 rounded-lg">
           <div class="flex items-start gap-2">
-            <svg class="w-5 h-5 text-emerald-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg class="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
             </svg>
-            <div>
-              <p class="text-sm font-semibold text-emerald-300 mb-1">Zero-Knowledge Privacy</p>
-              <p class="text-xs text-emerald-200">
-                The proof reveals only the specific claim (e.g., your country), without exposing any other personal data.
+            <div class="flex-1">
+              <p class="text-xs font-bold text-emerald-400 mb-1">Zero-Knowledge</p>
+              <p class="text-[11px] text-zinc-400 leading-relaxed">
+                Only reveals specific claim, not personal data
               </p>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- Action buttons -->
-      <div class="px-6 py-4 border-t border-zinc-800 space-y-2">
-        <button id="generate-btn" class="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-2">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <!-- Action buttons (fixed footer) -->
+      <div class="absolute bottom-0 left-0 right-0 px-4 py-4 border-t border-zinc-800 bg-zinc-950 space-y-2">
+        <button id="generate-btn" class="w-full py-2.5 bg-emerald-500 hover:bg-emerald-600 text-zinc-950 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
           </svg>
-          Generate ${proofType === 'country' ? 'Country' : proofType === 'email_domain' ? 'Email Domain' : ''} Proof
+          Generate ${proofType === 'country' ? 'Country' : proofType === 'email_domain' ? 'Email' : ''} Proof
         </button>
-        <button id="cancel-btn" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-sm font-semibold transition-colors">
+        <button id="cancel-btn" class="w-full py-2.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-400 rounded-lg text-xs font-semibold transition-colors">
           Cancel
         </button>
       </div>
@@ -1477,6 +1524,18 @@ async function showGenerateRequestPage(requestId) {
   // Add button handlers
   document.getElementById('generate-btn').addEventListener('click', async () => {
     const genBtn = document.getElementById('generate-btn');
+
+    // For email_domain proofs, redirect to the generation form
+    if (proofType === 'email_domain') {
+      // Store requestId in session storage so the form knows this is from a website request
+      sessionStorage.setItem('pendingRequestId', requestId);
+
+      // Navigate to the main popup with the email proof generation form
+      window.location.href = 'popup.html?tab=proofs&generate=email_domain';
+      return;
+    }
+
+    // For country proofs, generate directly (background handles IP geolocation)
     genBtn.innerHTML = '<div class="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>';
     genBtn.disabled = true;
 
@@ -1492,6 +1551,13 @@ async function showGenerateRequestPage(requestId) {
         throw new Error(genResponse.error);
       }
 
+      // Update the pending request with the generated proof
+      await chrome.runtime.sendMessage({
+        action: 'updatePendingRequestProof',
+        requestId: requestId,
+        proof: genResponse.proof
+      });
+
       // Auto-grant permission to requesting origin and return proof
       await chrome.runtime.sendMessage({
         action: 'approveProofRequest',
@@ -1501,7 +1567,7 @@ async function showGenerateRequestPage(requestId) {
 
       window.close();
     } catch (error) {
-      genBtn.innerHTML = `<span>Error: ${error.message}</span>`;
+      genBtn.innerHTML = `<span class="text-[10px]">Error: ${error.message}</span>`;
       genBtn.disabled = false;
       setTimeout(() => {
         genBtn.innerHTML = 'Try Again';

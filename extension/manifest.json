@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "ZK Vault",
-  "version": "0.1.4",
+  "version": "0.1.6",
   "description": "Privacy-preserving identity verification using zero-knowledge proofs. Prove claims about yourself without revealing personal data.",
   "permissions": [
     "storage"
@@ -21,7 +21,13 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["content/inject-api.js"],
+      "js": ["content/page-api.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content/content-bridge.js"],
       "run_at": "document_start"
     }
   ],
