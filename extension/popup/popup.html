@@ -27,7 +27,7 @@
     }
   </style>
 </head>
-<body class="w-[400px] min-h-[500px] bg-zinc-950 text-white font-mono">
+<body class="w-[400px] h-[560px] bg-zinc-950 text-white font-mono">
   <div>
     <!-- Header -->
     <header class="border-b border-zinc-800 bg-zinc-950 p-4">
@@ -54,7 +54,7 @@
     </nav>
 
     <!-- Proofs Tab -->
-    <div id="proofs-tab" class="tab-content block p-4">
+    <div id="proofs-tab" class="tab-content block p-4 overflow-y-auto" style="height: calc(560px - 108px);">
       <div class="mb-5">
         <h2 class="text-base font-semibold mb-2">Your Proofs</h2>
         <p class="text-xs text-zinc-400 leading-relaxed">Generate zero-knowledge proofs to verify claims without revealing private data.</p>
@@ -95,7 +95,7 @@
     </div>
 
     <!-- Permissions Tab -->
-    <div id="permissions-tab" class="tab-content hidden p-4">
+    <div id="permissions-tab" class="tab-content hidden p-4 overflow-y-auto" style="height: calc(560px - 108px);">
       <div class="mb-5">
         <h2 class="text-base font-semibold mb-2">App Permissions</h2>
         <p class="text-xs text-zinc-400 leading-relaxed">Manage which websites can access your proofs.</p>
@@ -115,7 +115,7 @@
     </div>
 
     <!-- Settings Tab -->
-    <div id="settings-tab" class="tab-content hidden p-4">
+    <div id="settings-tab" class="tab-content hidden p-4 overflow-y-auto" style="height: calc(560px - 108px);">
       <div class="mb-5">
         <h2 class="text-base font-semibold mb-2">Settings</h2>
       </div>
@@ -200,8 +200,8 @@
   </div>
 
   <!-- Share Preview Page -->
-  <div id="share-preview-page" class="hidden fixed top-0 left-0 w-[400px] h-[600px] bg-zinc-950 z-50" style="overflow: hidden !important;">
-    <div class="h-full flex flex-col" style="overflow: hidden !important; max-height: 600px;">
+  <div id="share-preview-page" class="hidden fixed top-0 left-0 w-[400px] h-[560px] bg-zinc-950 z-50" style="overflow: hidden !important;">
+    <div class="h-full flex flex-col" style="overflow: hidden !important; max-height: 560px;">
       <!-- Header with back button -->
       <div class="px-4 py-3 border-b border-zinc-800 flex items-center gap-3 shrink-0" style="height: 52px;">
         <button id="back-to-proofs" class="text-zinc-400 hover:text-white transition-colors flex items-center p-1">
