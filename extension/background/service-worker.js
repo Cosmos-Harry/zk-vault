@@ -26,7 +26,8 @@ const pendingRequests = new Map();
 const STORAGE_KEYS = {
   PROOFS: 'zk_vault_proofs',
   PERMISSIONS: 'zk_vault_permissions',
-  SETTINGS: 'zk_vault_settings'
+  SETTINGS: 'zk_vault_settings',
+  USER_SECRET: 'zk_vault_user_secret'
 };
 
 // Proof types supported
@@ -347,6 +348,38 @@ async function performAutoRegistration(proof, backendUrl) {
 }
 
 /**
+ * Get or generate stable user secret (stored in extension storage)
+ * This secret is used to generate a consistent identity hash across all proof types
+ */
+async function getUserSecret() {
+  const { [STORAGE_KEYS.USER_SECRET]: secret } = await chrome.storage.local.get(STORAGE_KEYS.USER_SECRET);
+
+  if (secret) {
+    return secret;
+  }
+
+  // Generate new 32-byte random secret (64 hex characters)
+  const array = new Uint8Array(32);
+  crypto.getRandomValues(array);
+  const newSecret = Array.from(array, b => b.toString(16).padStart(2, '0')).join('');
+
+  // Store it permanently
+  await chrome.storage.local.set({ [STORAGE_KEYS.USER_SECRET]: newSecret });
+  console.log('[ZK Vault] Generated new user secret for stable identity');
+
+  return newSecret;
+}
+
+/**
+ * Get stable identity hash from user secret
+ * This ensures the same pseudonym across all proof types
+ */
+async function getIdentityHash() {
+  const secret = await getUserSecret();
+  return await hashString(secret);
+}
+
+/**
  * Build registration payload for backend (async)
  */
 async function buildRegistrationPayload(proof) {
@@ -357,11 +390,14 @@ async function buildRegistrationPayload(proof) {
     throw new Error('Invalid proof structure: missing type');
   }
 
+  // Use stable browser-based identity hash (consistent across all proof types)
+  const identityHash = await getIdentityHash();
+
   if (proof.type === PROOF_TYPES.COUNTRY) {
     return {
       countryProof: {
-        identityHash: proof.publicInputs.commitment, // Stable identity
-        proofHash: await generateProofHash(proof), // Unique nullifier
+        identityHash: identityHash, // Stable identity from extension secret
+        proofHash: proof.publicInputs.commitment, // ZK commitment for nullifier
         code: proof.publicInputs.countryCode,
         flag: getCountryFlag(proof.publicInputs.countryCode),
         name: proof.publicInputs.countryName
@@ -370,23 +406,14 @@ async function buildRegistrationPayload(proof) {
   } else if (proof.type === PROOF_TYPES.EMAIL_DOMAIN) {
     return {
       emailProof: {
-        identityHash: proof.publicInputs.commitment,
-        proofHash: await generateProofHash(proof),
+        identityHash: identityHash, // Stable identity from extension secret
+        proofHash: proof.publicInputs.commitment, // ZK commitment for nullifier
         domain: proof.publicInputs.domain
       }
     };
   }
 
   throw new Error('Unsupported proof type for registration: ' + proof.type);
-}
-
-/**
- * Generate unique proof hash for nullifier (async)
- */
-async function generateProofHash(proof) {
-  // Combine proof data with timestamp for uniqueness
-  const uniqueString = proof.data + Date.now() + Math.random();
-  return await hashString(uniqueString);
 }
 
 /**
