@@ -267,8 +267,6 @@ async function returnProofWithRegistration(proof, autoRegister, backendUrl, send
       registration = await performAutoRegistration(proof, backendUrl);
       console.log(`[ZK Vault] Auto-registration successful:`, registration);
     } catch (error) {
-      console.error('[ZK Vault] Auto-registration failed:', error);
-
       // Check if error is due to proof already being used (expected when reusing existing proof)
       const errorMessage = error.message || '';
       if (errorMessage.includes('already used') || errorMessage.includes('already registered')) {
@@ -277,7 +275,8 @@ async function returnProofWithRegistration(proof, autoRegister, backendUrl, send
         // Don't treat this as a fatal error - just return the proof without registration
         // The frontend will handle this by using existing session data
       } else {
-        // For other unexpected errors, log them
+        // For other unexpected errors, log them as errors
+        console.error('[ZK Vault] Auto-registration failed:', error);
         console.warn('[ZK Vault] Registration failed with unexpected error:', errorMessage);
       }
       // Continue anyway, return proof without registration
@@ -335,8 +334,12 @@ async function performAutoRegistration(proof, backendUrl) {
     let errorMessage = `HTTP ${response.status}`;
     try {
       const errorBody = await response.json();
-      console.error('[ZK Vault] Backend error response:', errorBody);
       errorMessage = errorBody.error || errorMessage;
+
+      // Only log detailed error if it's NOT the expected "already used" case
+      if (!errorMessage.includes('already used') && !errorMessage.includes('already registered')) {
+        console.error('[ZK Vault] Backend error response:', errorBody);
+      }
     } catch (e) {
       console.error('[ZK Vault] Could not parse error response');
     }
