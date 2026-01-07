@@ -268,6 +268,18 @@ async function returnProofWithRegistration(proof, autoRegister, backendUrl, send
       console.log(`[ZK Vault] Auto-registration successful:`, registration);
     } catch (error) {
       console.error('[ZK Vault] Auto-registration failed:', error);
+
+      // Check if error is due to proof already being used (expected when reusing existing proof)
+      const errorMessage = error.message || '';
+      if (errorMessage.includes('already used') || errorMessage.includes('already registered')) {
+        console.log('[ZK Vault] Proof already registered - this is normal when reusing an existing proof');
+        console.log('[ZK Vault] User should already be logged in on the frontend');
+        // Don't treat this as a fatal error - just return the proof without registration
+        // The frontend will handle this by using existing session data
+      } else {
+        // For other unexpected errors, log them
+        console.warn('[ZK Vault] Registration failed with unexpected error:', errorMessage);
+      }
       // Continue anyway, return proof without registration
     }
   }
