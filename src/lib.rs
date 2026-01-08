@@ -23,8 +23,6 @@ pub mod verifier;
 pub mod wasm;
 
 // Re-export main types
-pub use proofs::email::EmailDomainProof;
-pub use proofs::location::LocationProof;
 pub use prover::Prover;
 pub use verifier::Verifier;
 

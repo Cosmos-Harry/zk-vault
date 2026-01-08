@@ -1,5 +1,3 @@
-//! Proof generation modules for different credential types.
+//! Country database for location proofs.
 
-pub mod email;
 pub mod location;
-
