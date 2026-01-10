@@ -1,1 +1,14 @@
 /target
+
+# macOS system files
+.DS_Store
+
+# Build artifacts and packages
+*.zip
+
+# Node modules
+node_modules/
+
+# IDE files
+.vscode/
+.idea/

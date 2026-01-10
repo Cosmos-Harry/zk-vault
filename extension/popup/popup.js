@@ -379,58 +379,57 @@ function getProofForm(proofType) {
   switch (proofType) {
     case 'email_domain':
       return `
-        <form id="proof-form" class="space-y-4">
+        <form id="proof-form" class="space-y-3.5">
           <div class="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
             <div class="flex items-start gap-2">
               <svg class="w-4 h-4 flex-shrink-0 mt-0.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
               </svg>
               <div>
-                <p class="text-xs text-emerald-300 leading-relaxed">
-                  <strong>100% Private:</strong> We never access your Gmail account. You download one email file (.eml), we process it locally and immediately delete it from memory after generating your proof.
+                <p class="text-[11px] text-emerald-300 leading-relaxed">
+                  <strong>100% Private:</strong> Download one .eml from Gmail. No servers. No storage. No trace.
                 </p>
               </div>
             </div>
           </div>
 
-          <div class="bg-zinc-900/50 border border-zinc-700 rounded-xl p-4">
-            <div class="flex items-center gap-2.5 mb-3">
-              <div class="bg-emerald-500/15 w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0">
-                <span class="text-sm text-emerald-400 font-semibold">1</span>
+          <div class="bg-zinc-900/50 border border-zinc-700 rounded-lg p-3">
+            <div class="flex items-center gap-2 mb-2.5">
+              <div class="bg-emerald-500/15 w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0">
+                <span class="text-xs text-emerald-400 font-semibold">1</span>
               </div>
-              <p class="text-sm font-medium text-zinc-200">Download Email from Gmail</p>
+              <p class="text-xs font-medium text-zinc-200">Download from Gmail</p>
             </div>
-            <ol class="text-xs text-zinc-400 leading-relaxed pl-9 mb-3 space-y-1">
+            <ol class="text-[11px] text-zinc-400 leading-relaxed pl-8 mb-3 space-y-0.5">
               <li>• Open any email in Gmail</li>
-              <li>• Click <strong class="text-zinc-300">⋮</strong> (three dots menu)</li>
-              <li>• Select <strong class="text-zinc-300">"Show original"</strong></li>
-              <li>• Click <strong class="text-zinc-300">"Download original"</strong> button</li>
+              <li>• Click ⋮ → "Show original"</li>
+              <li>• Click "Download original"</li>
             </ol>
             <button type="button" id="open-gmail-btn"
-              class="w-full py-2 px-4 bg-zinc-700 hover:bg-zinc-600 text-white rounded-lg text-[13px] transition-all flex items-center justify-center gap-2">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              class="w-full py-2 px-4 bg-zinc-700 hover:bg-zinc-600 text-white rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-2">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
               </svg>
-              Open Gmail in New Tab
+              Open Gmail
             </button>
           </div>
 
-          <div class="bg-zinc-900/50 border border-zinc-700 rounded-xl p-4">
-            <div class="flex items-center gap-2.5 mb-3">
-              <div class="bg-emerald-500/15 w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0">
-                <span class="text-sm text-emerald-400 font-semibold">2</span>
+          <div class="bg-zinc-900/50 border border-zinc-700 rounded-lg p-3">
+            <div class="flex items-center gap-2 mb-3">
+              <div class="bg-emerald-500/15 w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0">
+                <span class="text-xs text-emerald-400 font-semibold">2</span>
               </div>
-              <p class="text-sm font-medium text-zinc-200">Upload .eml File</p>
+              <p class="text-xs font-medium text-zinc-200">Upload .eml File</p>
             </div>
             <input type="file" id="eml-upload" accept=".eml" class="hidden" required>
             <button type="button" id="upload-btn"
-              class="w-full py-3 px-4 bg-gradient-to-br from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white rounded-lg text-sm font-semibold transition-all hover:shadow-lg hover:shadow-emerald-500/20 hover:-translate-y-0.5 flex items-center justify-center gap-2">
-              <svg class="w-4.5 h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              class="w-full py-2 px-4 bg-gradient-to-br from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white rounded-lg text-xs font-semibold transition-all hover:shadow-lg hover:shadow-emerald-500/20 flex items-center justify-center gap-2">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
               </svg>
               Choose .eml File
             </button>
-            <p id="file-selected" class="text-xs text-zinc-400 hidden mt-2"></p>
+            <p id="file-selected" class="text-[11px] text-zinc-400 hidden mt-2"></p>
           </div>
 
           <div id="progress-container" class="hidden"></div>
@@ -1525,13 +1524,13 @@ async function showGenerateRequestPage(requestId) {
   document.getElementById('generate-btn').addEventListener('click', async () => {
     const genBtn = document.getElementById('generate-btn');
 
-    // For email_domain proofs, redirect to the generation form
+    // For email_domain proofs, show the generation modal directly
     if (proofType === 'email_domain') {
       // Store requestId in session storage so the form knows this is from a website request
       sessionStorage.setItem('pendingRequestId', requestId);
 
-      // Navigate to the main popup with the email proof generation form
-      window.location.href = 'popup.html?tab=proofs&generate=email_domain';
+      // Show email domain generation modal directly
+      await showEmailDomainGenerationModal(requestId);
       return;
     }
 
@@ -1583,4 +1582,307 @@ async function showGenerateRequestPage(requestId) {
 
     window.close();
   });
+}
+
+/**
+ * Show email domain generation modal directly (for website requests)
+ */
+async function showEmailDomainGenerationModal(requestId) {
+  // Get pending request from background
+  const response = await chrome.runtime.sendMessage({
+    action: 'getPendingRequest',
+    requestId: requestId
+  });
+
+  if (response.error) {
+    document.body.innerHTML = `
+      <div class="flex items-center justify-center h-screen bg-zinc-950 text-white p-4">
+        <div class="text-center">
+          <p class="text-red-400 mb-4">Error: ${response.error}</p>
+          <button onclick="window.close()" class="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-sm">Close</button>
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  const { origin, autoRegister } = response.request;
+  const domain = new URL(origin).hostname;
+
+  // Replace entire body with email domain generation modal
+  document.body.className = 'w-[400px] h-[600px] bg-zinc-950 text-white font-mono';
+  document.body.innerHTML = `
+    <div class="w-full h-full flex flex-col">
+      <!-- Header -->
+      <div class="px-4 py-4 border-b border-zinc-800 bg-zinc-950">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" class="text-emerald-500">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+            </svg>
+          </div>
+          <div>
+            <h1 class="text-sm font-bold text-emerald-500">ZK Vault</h1>
+            <p class="text-[10px] text-zinc-500">Generate Email Domain Proof</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Content -->
+      <div class="flex-1 overflow-y-auto px-4 py-3 bg-zinc-950">
+        <!-- Origin Info -->
+        <div class="mb-3">
+          <div class="flex items-center gap-2 p-2.5 bg-zinc-900 border border-zinc-800 rounded-lg">
+            <div class="w-8 h-8 rounded-lg bg-zinc-800 flex items-center justify-center flex-shrink-0">
+              <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 119-9"/>
+              </svg>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="text-[11px] font-bold text-white truncate">${domain}</div>
+              <div class="text-[9px] text-zinc-500">Requires email domain proof</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Privacy Notice -->
+        <div class="mb-3 p-2.5 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
+          <div class="flex items-start gap-2">
+            <svg class="w-3.5 h-3.5 flex-shrink-0 mt-0.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+            </svg>
+            <p class="text-[10px] text-emerald-300 leading-relaxed">
+              <strong>100% Private:</strong> Download one .eml from Gmail, process locally, delete immediately.
+            </p>
+          </div>
+        </div>
+
+        <!-- Step 1: Download Email -->
+        <div class="mb-3 bg-zinc-900/50 border border-zinc-700 rounded-lg p-3">
+          <div class="flex items-center gap-2 mb-2">
+            <div class="bg-emerald-500/15 w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0">
+              <span class="text-xs text-emerald-400 font-semibold">1</span>
+            </div>
+            <p class="text-xs font-medium text-zinc-200">Download from Gmail</p>
+          </div>
+          <ol class="text-[10px] text-zinc-400 leading-relaxed pl-8 mb-2.5 space-y-0.5">
+            <li>• Open any email in Gmail</li>
+            <li>• Click ⋮ → "Show original"</li>
+            <li>• Click "Download original"</li>
+          </ol>
+          <button type="button" id="open-gmail-btn"
+            class="w-full py-1.5 px-3 bg-zinc-700 hover:bg-zinc-600 text-white rounded-lg text-[11px] transition-all flex items-center justify-center gap-1.5">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+            </svg>
+            Open Gmail
+          </button>
+        </div>
+
+        <!-- Step 2: Upload File -->
+        <div class="mb-3 bg-zinc-900/50 border border-zinc-700 rounded-lg p-3">
+          <div class="flex items-center gap-2 mb-2.5">
+            <div class="bg-emerald-500/15 w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0">
+              <span class="text-xs text-emerald-400 font-semibold">2</span>
+            </div>
+            <p class="text-xs font-medium text-zinc-200">Upload .eml File</p>
+          </div>
+          <input type="file" id="eml-upload" accept=".eml" class="hidden">
+          <button type="button" id="upload-btn"
+            class="w-full py-2.5 px-4 bg-gradient-to-br from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white rounded-lg text-xs font-semibold transition-all hover:shadow-lg hover:shadow-emerald-500/20 flex items-center justify-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+            </svg>
+            Choose .eml File
+          </button>
+          <p id="file-selected" class="text-[10px] text-zinc-400 hidden mt-1.5"></p>
+        </div>
+
+        <!-- Progress Container -->
+        <div id="progress-container" class="hidden"></div>
+      </div>
+
+      <!-- Cancel Button (fixed footer) -->
+      <div class="px-4 py-4 border-t border-zinc-800 bg-zinc-950">
+        <button id="cancel-btn" class="w-full py-2.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-400 rounded-lg text-xs font-semibold transition-colors">
+          Cancel
+        </button>
+      </div>
+    </div>
+  `;
+
+  // Setup event handlers
+  const openGmailBtn = document.getElementById('open-gmail-btn');
+  const uploadBtn = document.getElementById('upload-btn');
+  const emlUpload = document.getElementById('eml-upload');
+  const fileSelected = document.getElementById('file-selected');
+  const cancelBtn = document.getElementById('cancel-btn');
+
+  // Open Gmail button
+  openGmailBtn.addEventListener('click', () => {
+    chrome.tabs.create({ url: 'https://mail.google.com' });
+  });
+
+  // Upload button triggers file input
+  uploadBtn.addEventListener('click', () => {
+    emlUpload.click();
+  });
+
+  // File selection handler
+  emlUpload.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (!file.name.endsWith('.eml')) {
+      showEmailProofError('Please select a .eml file');
+      return;
+    }
+
+    fileSelected.textContent = `Selected: ${file.name}`;
+    fileSelected.classList.remove('hidden');
+
+    // Start proof generation
+    await handleEmailProofGenerationForRequest(file, requestId);
+  });
+
+  // Cancel button
+  cancelBtn.addEventListener('click', async () => {
+    await chrome.runtime.sendMessage({
+      action: 'denyProofRequest',
+      requestId: requestId
+    });
+    window.close();
+  });
+}
+
+/**
+ * Handle email proof generation for website request
+ */
+async function handleEmailProofGenerationForRequest(file, requestId) {
+  const container = document.getElementById('progress-container');
+  container.classList.remove('hidden');
+  container.innerHTML = `
+    <div class="bg-zinc-800 border border-zinc-700 rounded-lg p-4 space-y-3">
+      <div class="flex items-center gap-2 text-sm text-zinc-300">
+        <div class="w-4 h-4 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
+        <span id="progress-text">Reading email file...</span>
+      </div>
+      <div class="w-full bg-zinc-700 rounded-full h-2">
+        <div id="progress-bar" class="bg-emerald-500 h-2 rounded-full transition-all duration-500" style="width: 10%"></div>
+      </div>
+      <p class="text-xs text-zinc-400 text-center">
+        Generating zero-knowledge proof (30-60 seconds)
+      </p>
+    </div>
+  `;
+
+  // Read file
+  const reader = new FileReader();
+  reader.onload = async (event) => {
+    const emlContent = event.target.result;
+
+    // Update progress
+    const progressText = document.getElementById('progress-text');
+    const progressBar = document.getElementById('progress-bar');
+
+    if (progressText) progressText.textContent = 'Verifying DKIM signature...';
+    if (progressBar) progressBar.style.width = '30%';
+
+    // Animate progress bar during 30-60s proof generation
+    let progress = 30;
+    const interval = setInterval(() => {
+      progress += 1;
+      if (progress <= 95 && progressBar) {
+        progressBar.style.width = `${progress}%`;
+      }
+      if (progress === 50 && progressText) {
+        progressText.textContent = 'Generating cryptographic proof...';
+      }
+    }, 600); // ~60 seconds to reach 95%
+
+    try {
+      const response = await chrome.runtime.sendMessage({
+        action: 'generateProof',
+        proofType: 'email_domain',
+        privateData: { emlContent }
+      });
+
+      clearInterval(interval);
+
+      if (response.error) {
+        showEmailProofError(response.error);
+      } else {
+        // Complete progress
+        if (progressBar) progressBar.style.width = '100%';
+        if (progressText) progressText.textContent = '✓ Proof generated!';
+
+        // Update the pending request with the generated proof
+        await chrome.runtime.sendMessage({
+          action: 'updatePendingRequestProof',
+          requestId: requestId,
+          proof: response.proof
+        });
+
+        // Auto-grant permission to requesting origin and return proof
+        await chrome.runtime.sendMessage({
+          action: 'approveProofRequest',
+          requestId: requestId,
+          grantPermission: true
+        });
+
+        // Close the popup window
+        setTimeout(() => {
+          window.close();
+        }, 1000);
+      }
+    } catch (error) {
+      clearInterval(interval);
+      showEmailProofError(error.message);
+    }
+  };
+
+  reader.onerror = () => {
+    showEmailProofError('Failed to read file');
+  };
+
+  reader.readAsText(file);
+}
+
+/**
+ * Show error in progress container for email proof
+ */
+function showEmailProofError(message) {
+  const container = document.getElementById('progress-container');
+  if (!container) return;
+
+  container.classList.remove('hidden');
+  container.innerHTML = `
+    <div class="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
+      <p class="text-sm text-red-300 font-medium">❌ Error</p>
+      <p class="text-xs text-red-400 mt-1">${getEmailProofErrorMessage(message)}</p>
+      <button id="error-reload-btn" class="mt-3 text-xs text-red-400 hover:text-red-300 underline">
+        Try Again
+      </button>
+    </div>
+  `;
+
+  // Add event listener for reload button
+  const reloadBtn = container.querySelector('#error-reload-btn');
+  if (reloadBtn) {
+    reloadBtn.addEventListener('click', () => location.reload());
+  }
+}
+
+/**
+ * Get user-friendly error message for email proofs
+ */
+function getEmailProofErrorMessage(error) {
+  if (error.includes('DKIM')) {
+    return "This email doesn't have a valid DKIM signature. Please try a different email from Gmail.";
+  } else if (error.includes('format')) {
+    return 'Invalid email file format. Make sure you downloaded the .eml file correctly.';
+  } else if (error.includes('From header')) {
+    return 'Could not extract email domain. Make sure the .eml file is valid.';
+  }
+  return error;
 }

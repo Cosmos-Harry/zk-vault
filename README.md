@@ -1,31 +1,73 @@
-# ZK Vault
+# ZK Vault: Prove Anything, Reveal Nothing
 
-**Prove Anything, Reveal Nothing**
+**Your Privacy, Cryptographically Guaranteed**
 
-Privacy-preserving identity verification using zero-knowledge proofs. A browser extension that lets you prove claims about yourself without revealing personal data.
+ZK Vault is a privacy-first browser extension that lets you prove claims about yourself without exposing personal information. Using cutting-edge zero-knowledge cryptography, verify your country, email domain, and other attributes while keeping your data completely private.
 
-[![Chrome Web Store](https://img.shields.io/badge/Chrome-Web%20Store-brightgreen)](https://chrome.google.com/webstore) *(Pending publication)*
+[![Chrome Web Store](https://img.shields.io/badge/Chrome-Web%20Store-brightgreen)](https://chromewebstore.google.com/detail/ghiclopdpcihbaednbbnldebfbdfdemf)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Version](https://img.shields.io/badge/version-0.1.6-blue.svg)](https://github.com/Cosmos-Harry/zk-vault/releases)
 
 ---
 
-## 🎯 Features
+## 🔐 How It Works
 
-- **Country Proof**: Prove your country location using IP-based geolocation without revealing your exact coordinates
-- **Email Domain Proof**: Verify your email domain (e.g., @gmail.com) using DKIM signatures without exposing your full email address
-- **Real ZK Proofs**: Powered by Groth16 cryptographic proofs on BN254 elliptic curve
-- **100% Private**: All proof generation happens locally in your browser - your data never leaves your device
-- **Web Integration**: Websites can request proofs via `window.zkVault` API with user permission
-- **Permission System**: You control which websites can access your proofs
-- **Auto-Registration**: Seamless integration with web applications
+ZK Vault uses zero-knowledge proofs to verify claims without revealing underlying data:
+
+1. **Generate Proofs**: Create cryptographic proofs of your attributes (country, email domain) locally in your browser
+2. **Store Securely**: All proofs are stored in your browser only - nothing is sent to servers
+3. **Share Selectively**: Websites can request proofs with your permission - you control what to share and when
+
+## ✨ Key Features
+
+### **Country Verification**
+Prove your country without revealing your exact location or IP address
+- Uses IP-based geolocation to determine country, then generates a cryptographic proof
+- Only country code is revealed - your coordinates and IP stay completely private
+- Real zero-knowledge cryptography, not just hidden data
+
+### **Email Domain Verification**
+Prove your email domain (e.g., @gmail.com, @university.edu) without exposing your full email address
+- Uses DKIM signatures for cryptographic verification
+- Your email is never uploaded or stored - processed locally and immediately deleted
+- Perfect for student discounts, company verification, or gated communities
+
+### **Real Cryptography**
+Built on battle-tested zero-knowledge technology
+- Groth16 ZK-SNARKs on BN254 elliptic curve
+- Same cryptographic primitives used by major blockchain projects
+- Not mock proofs - actual verifiable cryptography that can't be forged
+
+### **100% Private**
+Your data never leaves your device. Period.
+- All proof generation happens locally in your browser using WebAssembly
+- No accounts, no registration, no tracking, no telemetry
+- We don't operate servers - there's nothing to collect your data
+- Open source - verify our privacy claims yourself
+
+### **Permission System**
+You're in complete control
+- Websites must request permission before accessing your proofs
+- See exactly what data will be shared before approving
+- Revoke permissions anytime from extension settings
+- Per-website isolation - proofs shared with one site don't leak to others
+
+### **Website Integration**
+Built for developers
+- Simple JavaScript API for requesting proofs
+- Auto-registration flow for seamless user onboarding
+- Works with any backend or framework
+- Comprehensive documentation and examples
 
 ---
 
 ## 📥 Installation
 
 ### Chrome Web Store (Recommended)
-*Coming soon - currently under review*
+
+**[📥 Install ZK Vault from Chrome Web Store](https://chromewebstore.google.com/detail/ghiclopdpcihbaednbbnldebfbdfdemf)**
+
+Click the link above and click "Add to Chrome" to install.
 
 ### Manual Installation (Development)
 
@@ -69,41 +111,86 @@ Privacy-preserving identity verification using zero-knowledge proofs. A browser 
 
 ### For Developers
 
-#### Basic Usage
+Integrate ZK Vault into your website with just a few lines of code:
 
-Websites can request proofs from users:
+#### **Quick Start**
 
 ```javascript
-// Check if ZK Vault is installed
-if (window.zkVault?.isInstalled()) {
-  // Request a country proof
-  const result = await window.zkVault.requestProof({
-    type: 'country'
-  });
+// 1. Check if user has ZK Vault installed
+if (!window.zkVault?.isInstalled()) {
+  // Prompt user to install extension
+  alert('Please install ZK Vault to continue');
+  return;
+}
 
-  if (result.proof) {
-    console.log('Country code:', result.proof.publicInputs.countryCode);
-    console.log('Proof data:', result.proof.data);
-  }
+// 2. Request a country proof (user must approve in extension popup)
+const result = await window.zkVault.requestProof({
+  type: 'country'
+});
+
+// 3. Use the proof data
+if (result.proof) {
+  console.log('Country code:', result.proof.publicInputs.countryCode);
+  console.log('Country name:', result.proof.publicInputs.countryName);
+  console.log('ZK proof:', result.proof.data);
 }
 ```
 
-#### Auto-Registration (Recommended)
+#### **Auto-Registration (Recommended)**
 
-Integrate ZK Vault with your backend for seamless user onboarding:
+Seamless user onboarding with zero personal data collection:
 
 ```javascript
-// Request proof with auto-registration
+// Request proof with automatic backend registration
 const result = await window.zkVault.requestProof({
   type: 'country',
   autoRegister: true,
   backendUrl: 'https://yoursite.com/api/auth/register'
 });
 
-// User is now registered and authenticated!
-console.log('User token:', result.registration.token);
-console.log('Pseudonym:', result.registration.user.pseudonym);
-console.log('User ID:', result.registration.user.id);
+// Extension automatically:
+// 1. Generates ZK proof
+// 2. Calls your /register endpoint
+// 3. Returns authenticated user session
+
+if (result.registration) {
+  // User is now registered and authenticated!
+  console.log('Auth token:', result.registration.token);
+  console.log('Anonymous ID:', result.registration.user.pseudonym);
+  console.log('Country:', result.proof.publicInputs.countryCode);
+
+  // Save token and redirect to app
+  localStorage.setItem('authToken', result.registration.token);
+  window.location.href = '/dashboard';
+}
+```
+
+**Your backend receives:**
+```json
+{
+  "proof": {
+    "data": "0x...",
+    "publicInputs": {
+      "countryCode": "US",
+      "countryName": "United States",
+      "commitment": "0x..."
+    }
+  }
+}
+```
+
+**Your backend returns:**
+```json
+{
+  "token": "jwt_token_here",
+  "user": {
+    "id": "stable_user_id",
+    "pseudonym": "Purple Octopus",
+    "badges": {
+      "country": { "code": "US", "flag": "🇺🇸" }
+    }
+  }
+}
 ```
 
 #### Email Domain Proof
@@ -169,25 +256,72 @@ console.log('Email domain:', result.proof.publicInputs.domain); // e.g., "gmail.
 
 ## 🛡️ Privacy Guarantees
 
-### Country Proof
-- ✅ **Reveals**: Country code (e.g., "US")
-- ❌ **Hidden**: Exact coordinates, IP address, city, region
-- 🔒 **Storage**: Only country code + cryptographic proof stored locally
-- 🔐 **Cryptography**: Groth16 ZK-SNARK on BN254 curve
+### What ZK Vault DOES:
+✅ Generate cryptographic proofs locally in your browser
+✅ Store proofs in local browser storage only
+✅ Let you share proofs with websites you explicitly trust
+✅ Give you full control over your identity data
+✅ Use real zero-knowledge cryptography (Groth16 ZK-SNARKs)
 
-### Email Domain Proof
-- ✅ **Reveals**: Email domain (e.g., "gmail.com")
-- ❌ **Hidden**: Full email address, email content
-- 🔒 **Processing**: Email processed in memory for 30-60s, then immediately deleted
-- 🔐 **Verification**: Uses DKIM signatures for cryptographic verification
+### What ZK Vault DOES NOT:
+❌ Upload your data to any servers
+❌ Track your browsing history or behavior
+❌ Share data with third parties
+❌ Require accounts, registration, or login
+❌ Collect analytics, telemetry, or usage data
 
-### Security
-- ✅ All proof generation happens locally in your browser
-- ✅ No data sent to external servers (except IP to ip-api.com for country detection)
-- ✅ Your proofs are stored locally using `chrome.storage.local`
-- ✅ Websites must request permission to access your proofs
-- ✅ You can revoke permissions at any time
-- ✅ Open source - verify our privacy claims by reviewing the code
+### What Each Proof Reveals:
+
+**Country Proof**
+- ✅ **Reveals**: Country code only (e.g., "US")
+- ❌ **Hidden**: Exact coordinates, IP address, city, state, region
+- 🔐 **How**: IP geolocation determines country, then ZK proof is generated locally
+
+**Email Domain Proof**
+- ✅ **Reveals**: Email domain only (e.g., "gmail.com")
+- ❌ **Hidden**: Full email address, inbox content, email metadata
+- 🔐 **How**: DKIM signature verification + ZK proof generation (email processed in memory for 30-60s, then immediately deleted)
+
+### Security Architecture:
+- 🔒 All cryptographic operations run in your browser (WebAssembly)
+- 🔒 Proofs stored in `chrome.storage.local` (never leaves your device)
+- 🔒 Websites require explicit permission to request proofs
+- 🔒 Per-website permission isolation
+- 🔒 Open source - audit the code yourself on [GitHub](https://github.com/Cosmos-Harry/zk-vault)
+
+---
+
+## 🎯 Use Cases
+
+### **Anonymous Forums & Communities**
+Build trust without sacrificing anonymity
+- Verify users are from allowed countries without collecting personal information
+- Require proof of email domain (e.g., only @company.com) without storing emails
+- Create verified-anonymous spaces for whistleblowers, activists, or sensitive discussions
+
+### **Gated Access & Verification**
+Control access without invasive data collection
+- Restrict content based on location without IP blocking or VPNs breaking your site
+- Verify educational email domains (@.edu) for student discounts
+- Age-restricted content without government IDs or facial recognition
+
+### **Privacy-First Applications**
+Build apps that respect user privacy from the ground up
+- Comply with GDPR/CCPA by not collecting unnecessary personal data
+- Give users cryptographic control over their identity
+- Reduce data breach risk - you can't leak data you never collected
+
+### **Decentralized Identity**
+Move beyond the username/password paradigm
+- Cryptographically provable claims without centralized identity providers
+- Compatible with Web3 and decentralized applications
+- Users own their identity data, not platforms
+
+### **Corporate & Enterprise**
+Verify employees or partners without exposing PII
+- Confirm employee email domains without collecting full email addresses
+- Location verification for distributed teams
+- Privacy-preserving access control for internal tools
 
 ---
 
