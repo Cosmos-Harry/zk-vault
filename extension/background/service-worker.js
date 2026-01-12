@@ -98,9 +98,30 @@ chrome.runtime.onInstalled.addListener(async () => {
 });
 
 /**
+ * Validate message origin for security
+ */
+function isValidMessageOrigin(sender) {
+  // Messages from extension pages (popup, background) are always valid
+  if (!sender.url) return true;
+  if (sender.url.startsWith('chrome-extension://')) return true;
+
+  // Messages from content scripts need origin validation
+  // Content scripts can be injected into any page, but we verify the sender
+  // Note: Chrome validates that sender.tab and sender.url are legitimate
+  return sender.tab != null; // Ensures message came from a real tab, not spoofed
+}
+
+/**
  * Handle messages from content scripts and popup
  */
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  // Validate message origin
+  if (!isValidMessageOrigin(sender)) {
+    console.warn('[ZK Vault] Rejected message from invalid origin:', sender);
+    sendResponse({ error: 'Invalid message origin' });
+    return false;
+  }
+
   console.log('Background received message:', request);
 
   switch (request.action) {
@@ -736,37 +757,11 @@ async function generateEmailDomainProof(privateData) {
  * Generate country proof using REAL ZK proofs
  */
 async function generateCountryProof(privateData) {
-  // Fetch country from IP geolocation (no CORS issues in background worker)
-  console.log('[ZK Vault] Detecting country from IP...');
+  // PRIVACY: Use browser Geolocation API (no third-party services!)
+  // Coordinates from popup → convert to country code locally
+  console.log('[ZK Vault] Generating country proof from coordinates...');
 
-  let countryCode;
-  try {
-    // Use ip-api.com instead of ipapi.co (better support for extensions)
-    const res = await fetch('http://ip-api.com/json/?fields=status,countryCode,country');
-
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-    }
-
-    const data = await res.json();
-    console.log('[ZK Vault] Geolocation response:', data);
-
-    if (data.status !== 'success') {
-      throw new Error('Geolocation API returned error status');
-    }
-
-    if (!data.countryCode) {
-      throw new Error('Could not determine country from IP');
-    }
-
-    countryCode = data.countryCode;
-    console.log('[ZK Vault] ✓ Country detected:', countryCode, '-', data.country);
-  } catch (error) {
-    console.error('[ZK Vault] Geolocation error:', error);
-    throw new Error('Failed to detect country from IP: ' + error.message);
-  }
-
-  // Ensure WASM is initialized
+  // Ensure WASM is initialized first
   if (!wasmInitialized) {
     await initializeWASM();
   }
@@ -775,9 +770,36 @@ async function generateCountryProof(privateData) {
     throw new Error('ZK prover not ready. Please try again.');
   }
 
-  console.log('[ZK Vault] Generating real Groth16 proof for country...');
+  // privateData should contain latitude and longitude from popup
+  if (!privateData || privateData.latitude === undefined || privateData.longitude === undefined) {
+    throw new Error('Location coordinates required. Please allow location access.');
+  }
 
-  // Generate REAL ZK proof using WASM (same approach as zk-chat)
+  const { latitude, longitude } = privateData;
+
+  console.log('[ZK Vault] Converting coordinates to country code...');
+
+  // Convert coordinates to country using bounding boxes
+  const countryCode = determineCountryFromCoordinates(latitude, longitude);
+
+  if (!countryCode) {
+    throw new Error('Could not determine country from coordinates. You may be in an unsupported region.');
+  }
+
+  // Map country codes to names
+  const countryNames = {
+    'US': 'United States', 'GB': 'United Kingdom', 'CA': 'Canada',
+    'AU': 'Australia', 'DE': 'Germany', 'FR': 'France', 'JP': 'Japan',
+    'IN': 'India', 'BR': 'Brazil', 'CN': 'China', 'IT': 'Italy',
+    'ES': 'Spain', 'MX': 'Mexico', 'RU': 'Russia', 'KR': 'South Korea',
+    'NL': 'Netherlands'
+  };
+  const countryName = countryNames[countryCode] || countryCode;
+
+  console.log('[ZK Vault] Detected country:', countryName);
+  console.log('[ZK Vault] Generating real Groth16 proof for country:', countryName);
+
+  // Generate ZK proof for the detected country
   const result = prove_country(countryCode);
 
   if (!result.success) {
@@ -797,6 +819,67 @@ async function generateCountryProof(privateData) {
     },
     privateData: null // IP geolocation is external, not stored
   };
+}
+
+/**
+ * Determine country from coordinates using simple bounding boxes
+ * Covers 16 major countries
+ */
+function determineCountryFromCoordinates(lat, lon) {
+  // Canada - Most of Canada is north of 49th parallel
+  if (lat >= 49 && lat <= 83.1 && lon >= -141 && lon <= -52.6) {
+    return 'CA';
+  }
+
+  // Southern Canada (Ontario/Quebec below 49th parallel, but east of -95°)
+  if (lat >= 41.7 && lat < 49 && lon >= -95 && lon <= -52.6) {
+    return 'CA';
+  }
+
+  // United States mainland (exclude areas we've already assigned to Canada)
+  if (lat >= 24.5 && lat <= 49 && lon >= -125 && lon <= -66.9) {
+    return 'US';
+  }
+
+  // Alaska
+  if (lat >= 51.2 && lat <= 71.4 && lon >= -179.1 && lon <= -129.9) {
+    return 'US';
+  }
+
+  // Hawaii
+  if (lat >= 18.9 && lat <= 28.5 && lon >= -160 && lon <= -154.8) {
+    return 'US';
+  }
+  // United Kingdom
+  if (lat >= 49.9 && lat <= 60.9 && lon >= -8.2 && lon <= 1.8) return 'GB';
+  // Germany
+  if (lat >= 47.3 && lat <= 55.1 && lon >= 5.9 && lon <= 15.0) return 'DE';
+  // France
+  if (lat >= 41.3 && lat <= 51.1 && lon >= -5.1 && lon <= 9.6) return 'FR';
+  // Japan
+  if (lat >= 24.0 && lat <= 45.5 && lon >= 123.0 && lon <= 154.0) return 'JP';
+  // India
+  if (lat >= 6.7 && lat <= 35.5 && lon >= 68.1 && lon <= 97.4) return 'IN';
+  // Brazil
+  if (lat >= -33.7 && lat <= 5.3 && lon >= -73.9 && lon <= -34.8) return 'BR';
+  // China
+  if (lat >= 18.2 && lat <= 53.6 && lon >= 73.5 && lon <= 135.1) return 'CN';
+  // Australia
+  if (lat >= -43.6 && lat <= -10.7 && lon >= 113.2 && lon <= 153.6) return 'AU';
+  // Italy
+  if (lat >= 36.6 && lat <= 47.1 && lon >= 6.6 && lon <= 18.5) return 'IT';
+  // Spain
+  if (lat >= 36.0 && lat <= 43.8 && lon >= -9.3 && lon <= 4.3) return 'ES';
+  // Mexico
+  if (lat >= 14.5 && lat <= 32.7 && lon >= -118.4 && lon <= -86.7) return 'MX';
+  // Russia
+  if (lat >= 41.2 && lat <= 81.9 && lon >= 19.6 && lon <= 180) return 'RU';
+  // South Korea
+  if (lat >= 33.1 && lat <= 38.6 && lon >= 125.0 && lon <= 131.9) return 'KR';
+  // Netherlands
+  if (lat >= 50.8 && lat <= 53.6 && lon >= 3.4 && lon <= 7.2) return 'NL';
+
+  return null;
 }
 
 /**

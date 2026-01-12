@@ -362,8 +362,11 @@ pub fn prove_country(country_code: &str) -> CountryProofResult {
     let bounds = ScaledBounds::new(country.min_lat, country.max_lat, country.min_lng, country.max_lng);
     let circuit = CountryProofCircuit::new_with_witness(lat, lng, &bounds, country.code);
     
-    // Generate proof
-    let mut rng = StdRng::seed_from_u64(js_sys::Date::now() as u64);
+    // Generate proof with cryptographically secure randomness
+    // Use getrandom (Web Crypto API) instead of predictable timestamp
+    let mut seed = [0u8; 32];
+    getrandom::getrandom(&mut seed).expect("Failed to get secure random bytes");
+    let mut rng = StdRng::from_seed(seed);
     
     match Groth16::<Bn254>::prove(&prover.proving_key, circuit, &mut rng) {
         Ok(proof) => {

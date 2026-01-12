@@ -37,6 +37,41 @@ async function copyToClipboard(text) {
 /**
  * Initialize popup
  */
+/**
+ * Ensure service worker is ready before sending messages
+ */
+async function ensureServiceWorkerReady() {
+  // Check if chrome.runtime is available
+  if (!chrome?.runtime?.id) {
+    // Service worker not ready, wait a bit and retry
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    // Try one more time
+    if (!chrome?.runtime?.id) {
+      throw new Error('Extension context invalidated. Please reload the extension.');
+    }
+  }
+  return true;
+}
+
+/**
+ * Safe wrapper for chrome.runtime.sendMessage with retry logic
+ */
+async function sendMessageSafely(message, retries = 3) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      await ensureServiceWorkerReady();
+      return await chrome.runtime.sendMessage(message);
+    } catch (error) {
+      if (i === retries - 1) {
+        throw error;
+      }
+      // Wait before retry
+      await new Promise(resolve => setTimeout(resolve, 200));
+    }
+  }
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
   console.log('ZK Vault popup loaded');
 
@@ -250,7 +285,7 @@ async function handleEmailProofGeneration(file) {
     }, 600); // ~60 seconds to reach 95%
 
     try {
-      const response = await chrome.runtime.sendMessage({
+      const response = await sendMessageSafely({
         action: 'generateProof',
         proofType: 'email_domain',
         privateData: { emlContent }
@@ -270,14 +305,14 @@ async function handleEmailProofGeneration(file) {
 
         if (pendingRequestId) {
           // Update the pending request with the generated proof
-          await chrome.runtime.sendMessage({
+          await sendMessageSafely({
             action: 'updatePendingRequestProof',
             requestId: pendingRequestId,
             proof: response.proof
           });
 
           // Auto-grant permission to requesting origin and return proof
-          await chrome.runtime.sendMessage({
+          await sendMessageSafely({
             action: 'approveProofRequest',
             requestId: pendingRequestId,
             grantPermission: true
@@ -441,18 +476,26 @@ function getProofForm(proofType) {
     case 'country':
       return `
         <form id="proof-form" class="space-y-4">
+          <div class="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
+            <div class="flex items-start gap-2">
+              <svg class="w-4 h-4 flex-shrink-0 mt-0.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+              </svg>
+              <div>
+                <p class="text-[11px] text-emerald-300 leading-relaxed">
+                  <strong>Maximum Privacy:</strong> Uses browser location API. No third-party services, no IP leaks.
+                </p>
+              </div>
+            </div>
+          </div>
           <div class="p-3 bg-zinc-800/50 border border-zinc-700 rounded-lg">
             <p class="text-xs font-semibold text-zinc-300 mb-2">How it works:</p>
             <ol class="ml-5 text-[11px] text-zinc-400 leading-relaxed space-y-1">
-              <li>We detect your country from your IP address</li>
+              <li>Browser requests your location (requires permission)</li>
+              <li>Converts coordinates to country locally</li>
               <li>Generate cryptographic ZK proof (5-10 seconds)</li>
-              <li>Only your country code is revealed</li>
+              <li>Only your country code is revealed in the proof</li>
             </ol>
-          </div>
-          <div class="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
-            <p class="text-xs text-emerald-300">
-              <strong>100% Private:</strong> Uses IP-based geolocation (no GPS permissions needed). Only reveals your country code in the proof.
-            </p>
           </div>
           <button type="submit" class="w-full py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-semibold transition-colors">
             Detect Country & Generate Proof
@@ -517,8 +560,54 @@ async function handleProofGeneration(e, proofType) {
     let privateData;
     switch (proofType) {
       case 'country':
-        // Country detection happens in background service worker (no CORS issues there)
-        privateData = null; // Background will fetch country from IP
+        // Get location from browser Geolocation API (with proper permissions)
+        try {
+          submitButton.innerHTML = `
+            <div class="flex items-center justify-center gap-2">
+              <div class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+              <span>Getting location...</span>
+            </div>
+          `;
+
+          // Check permission state first to ensure prompt is shown if needed
+          let permissionState = 'prompt';
+          try {
+            const result = await navigator.permissions.query({ name: 'geolocation' });
+            permissionState = result.state;
+            console.log('Geolocation permission state:', permissionState);
+          } catch (e) {
+            console.log('Could not query permission state:', e);
+          }
+
+          const position = await new Promise((resolve, reject) => {
+            if (!navigator.geolocation) {
+              reject(new Error('Geolocation not supported'));
+              return;
+            }
+            navigator.geolocation.getCurrentPosition(resolve, reject, {
+              enableHighAccuracy: false,
+              timeout: 10000,
+              maximumAge: 0 // Always request fresh location
+            });
+          });
+
+          privateData = {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude
+          };
+        } catch (geoError) {
+          let errorMsg = 'Failed to get location';
+          if (geoError.code === 1) {
+            errorMsg = 'Location permission denied. Please allow location access in your browser settings.';
+          } else if (geoError.code === 2) {
+            errorMsg = 'Location unavailable. Please check your device settings.';
+          } else if (geoError.code === 3) {
+            errorMsg = 'Location request timed out. Please try again.';
+          } else {
+            errorMsg = geoError.message || 'Failed to get location';
+          }
+          throw new Error(errorMsg);
+        }
         break;
 
       case 'age':
@@ -532,7 +621,7 @@ async function handleProofGeneration(e, proofType) {
     }
 
     // Send generation request to background
-    const response = await chrome.runtime.sendMessage({
+    const response = await sendMessageSafely({
       action: 'generateProof',
       proofType: proofType,
       privateData: privateData
@@ -560,7 +649,7 @@ async function handleProofGeneration(e, proofType) {
  */
 async function loadProofs() {
   try {
-    const response = await chrome.runtime.sendMessage({ action: 'getProofs' });
+    const response = await sendMessageSafely({ action: 'getProofs' });
 
     if (response.error) {
       throw new Error(response.error);
@@ -1065,7 +1154,7 @@ async function deleteProof(type) {
     deleteModal.removeEventListener('click', handleBackdropClick);
 
     try {
-      const response = await chrome.runtime.sendMessage({
+      const response = await sendMessageSafely({
         action: 'deleteProof',
         proofType: type
       });
@@ -1206,7 +1295,7 @@ function setupSettings() {
     }
 
     await chrome.storage.local.clear();
-    await chrome.runtime.sendMessage({ action: 'initialize' });
+    await sendMessageSafely({ action: 'initialize' });
 
     await loadProofs();
     await loadPermissions();
@@ -1239,7 +1328,7 @@ async function showPermissionRequestPage(requestId) {
   console.log('[ZK Vault] Showing permission request page for:', requestId);
 
   // Get pending request from background
-  const response = await chrome.runtime.sendMessage({
+  const response = await sendMessageSafely({
     action: 'getPendingRequest',
     requestId: requestId
   });
@@ -1374,7 +1463,7 @@ async function showPermissionRequestPage(requestId) {
     document.getElementById('allow-btn').innerHTML = '<div class="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>';
     document.getElementById('allow-btn').disabled = true;
 
-    await chrome.runtime.sendMessage({
+    await sendMessageSafely({
       action: 'approveProofRequest',
       requestId: requestId,
       grantPermission: true
@@ -1384,7 +1473,7 @@ async function showPermissionRequestPage(requestId) {
   });
 
   document.getElementById('deny-btn').addEventListener('click', async () => {
-    await chrome.runtime.sendMessage({
+    await sendMessageSafely({
       action: 'denyProofRequest',
       requestId: requestId
     });
@@ -1400,7 +1489,7 @@ async function showGenerateRequestPage(requestId) {
   console.log('[ZK Vault] Showing generation request page for:', requestId);
 
   // Get pending request from background
-  const response = await chrome.runtime.sendMessage({
+  const response = await sendMessageSafely({
     action: 'getPendingRequest',
     requestId: requestId
   });
@@ -1498,7 +1587,7 @@ async function showGenerateRequestPage(requestId) {
             <div class="flex-1">
               <p class="text-xs font-bold text-emerald-400 mb-1">Zero-Knowledge</p>
               <p class="text-[11px] text-zinc-400 leading-relaxed">
-                Only reveals specific claim, not personal data
+                ${proofType === 'country' ? 'Uses browser location API. No third-party services, no IP leaks.' : 'Only reveals specific claim, not personal data'}
               </p>
             </div>
           </div>
@@ -1534,16 +1623,65 @@ async function showGenerateRequestPage(requestId) {
       return;
     }
 
-    // For country proofs, generate directly (background handles IP geolocation)
+    // For country proofs, get geolocation first
     genBtn.innerHTML = '<div class="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>';
     genBtn.disabled = true;
 
     try {
+      // Get location for country proofs
+      let privateData = null;
+      if (proofType === 'country') {
+        try {
+          genBtn.innerHTML = '<span class="text-[10px]">Getting location...</span>';
+
+          // Check permission state first
+          let permissionState = 'prompt';
+          try {
+            const result = await navigator.permissions.query({ name: 'geolocation' });
+            permissionState = result.state;
+            console.log('Geolocation permission state:', permissionState);
+          } catch (e) {
+            console.log('Could not query permission state:', e);
+          }
+
+          const position = await new Promise((resolve, reject) => {
+            if (!navigator.geolocation) {
+              reject(new Error('Geolocation not supported'));
+              return;
+            }
+            navigator.geolocation.getCurrentPosition(resolve, reject, {
+              enableHighAccuracy: false,
+              timeout: 10000,
+              maximumAge: 0
+            });
+          });
+
+          privateData = {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude
+          };
+
+          genBtn.innerHTML = '<div class="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>';
+        } catch (geoError) {
+          let errorMsg = 'Failed to get location';
+          if (geoError.code === 1) {
+            errorMsg = 'Location permission denied. Please allow location access.';
+          } else if (geoError.code === 2) {
+            errorMsg = 'Location unavailable. Please check your device settings.';
+          } else if (geoError.code === 3) {
+            errorMsg = 'Location request timed out. Please try again.';
+          } else {
+            errorMsg = geoError.message || 'Failed to get location';
+          }
+          throw new Error(errorMsg);
+        }
+      }
+
       // Generate the proof
-      const genResponse = await chrome.runtime.sendMessage({
+      const genResponse = await sendMessageSafely({
         action: 'generateProof',
         proofType: proofType,
-        privateData: null // Background handles country detection
+        privateData: privateData
       });
 
       if (genResponse.error) {
@@ -1551,14 +1689,14 @@ async function showGenerateRequestPage(requestId) {
       }
 
       // Update the pending request with the generated proof
-      await chrome.runtime.sendMessage({
+      await sendMessageSafely({
         action: 'updatePendingRequestProof',
         requestId: requestId,
         proof: genResponse.proof
       });
 
       // Auto-grant permission to requesting origin and return proof
-      await chrome.runtime.sendMessage({
+      await sendMessageSafely({
         action: 'approveProofRequest',
         requestId: requestId,
         grantPermission: true
@@ -1575,7 +1713,7 @@ async function showGenerateRequestPage(requestId) {
   });
 
   document.getElementById('cancel-btn').addEventListener('click', async () => {
-    await chrome.runtime.sendMessage({
+    await sendMessageSafely({
       action: 'denyProofRequest',
       requestId: requestId
     });
@@ -1589,7 +1727,7 @@ async function showGenerateRequestPage(requestId) {
  */
 async function showEmailDomainGenerationModal(requestId) {
   // Get pending request from background
-  const response = await chrome.runtime.sendMessage({
+  const response = await sendMessageSafely({
     action: 'getPendingRequest',
     requestId: requestId
   });
@@ -1747,7 +1885,7 @@ async function showEmailDomainGenerationModal(requestId) {
 
   // Cancel button
   cancelBtn.addEventListener('click', async () => {
-    await chrome.runtime.sendMessage({
+    await sendMessageSafely({
       action: 'denyProofRequest',
       requestId: requestId
     });
@@ -1801,7 +1939,7 @@ async function handleEmailProofGenerationForRequest(file, requestId) {
     }, 600); // ~60 seconds to reach 95%
 
     try {
-      const response = await chrome.runtime.sendMessage({
+      const response = await sendMessageSafely({
         action: 'generateProof',
         proofType: 'email_domain',
         privateData: { emlContent }
@@ -1817,14 +1955,14 @@ async function handleEmailProofGenerationForRequest(file, requestId) {
         if (progressText) progressText.textContent = '✓ Proof generated!';
 
         // Update the pending request with the generated proof
-        await chrome.runtime.sendMessage({
+        await sendMessageSafely({
           action: 'updatePendingRequestProof',
           requestId: requestId,
           proof: response.proof
         });
 
         // Auto-grant permission to requesting origin and return proof
-        await chrome.runtime.sendMessage({
+        await sendMessageSafely({
           action: 'approveProofRequest',
           requestId: requestId,
           grantPermission: true
