@@ -1,10 +1,59 @@
 /**
  * ZK Vault Popup JavaScript
  * Handles UI interactions and communication with background service worker
- * Version: 0.1.1 - 2026-01-04
+ * Version: 0.1.8 - 2026-01-13
  */
 
-console.log('[ZK Vault] Popup loaded - Version 0.1.3 - Back button visible, bigger card, no scrollbar');
+// Debug mode (set to false for production builds)
+const DEBUG_MODE = true; // TODO: Set to false before Chrome Web Store submission
+
+// Debug logger (only logs when DEBUG_MODE is true)
+const debugLog = (...args) => {
+  if (DEBUG_MODE) {
+    console.log(...args);
+  }
+};
+
+debugLog('[ZK Vault] Popup loaded - Version 0.1.8');
+
+// Encryption helper functions
+async function getUserSecretSecurely() {
+  const { encryptValue, decryptValue, isEncrypted } = await import('../lib/encryption.js');
+
+  const data = await chrome.storage.local.get('zk_vault_user_secret');
+  const stored = data.zk_vault_user_secret;
+
+  if (!stored) {
+    return null;
+  }
+
+  // Check if already encrypted
+  if (isEncrypted(stored)) {
+    try {
+      return await decryptValue(stored);
+    } catch (error) {
+      console.error('[ZK Vault] Failed to decrypt user secret:', error);
+      return null;
+    }
+  }
+
+  // Legacy: if stored as plaintext, encrypt it and re-save
+  if (typeof stored === 'string') {
+    debugLog('[ZK Vault] Migrating plaintext user secret to encrypted storage');
+    const encrypted = await encryptValue(stored);
+    await chrome.storage.local.set({ zk_vault_user_secret: encrypted });
+    return stored;
+  }
+
+  return null;
+}
+
+async function storeUserSecretSecurely(secret) {
+  const { encryptValue } = await import('../lib/encryption.js');
+  const encrypted = await encryptValue(secret);
+  await chrome.storage.local.set({ zk_vault_user_secret: encrypted });
+  debugLog('[ZK Vault] User secret stored securely (encrypted)');
+}
 
 // DOM Elements
 const tabs = document.querySelectorAll('.tab-btn');
@@ -324,6 +373,9 @@ async function handleEmailProofGeneration(file) {
             proof: response.proof
           });
 
+          // Check if autoRegister is enabled before approving
+          const autoRegister = sessionStorage.getItem('autoRegister') === 'true';
+
           // Auto-grant permission to requesting origin and return proof
           await sendMessageSafely({
             action: 'approveProofRequest',
@@ -331,13 +383,23 @@ async function handleEmailProofGeneration(file) {
             grantPermission: true
           });
 
-          // Clear the pending request ID
+          // Clear session storage
           sessionStorage.removeItem('pendingRequestId');
+          sessionStorage.removeItem('autoRegister');
 
-          // Close the popup window (will return to website)
-          setTimeout(() => {
-            window.close();
-          }, 1000);
+          // Close the popup window
+          // If autoRegister is true, give a tiny delay to ensure background completes
+          // Otherwise show success message for 1 second
+          if (autoRegister) {
+            // Small delay to ensure auto-registration completes
+            setTimeout(() => {
+              window.close();
+            }, 300);
+          } else {
+            setTimeout(() => {
+              window.close();
+            }, 1000);
+          }
         } else {
           // Normal flow: just close modal and reload proofs
           setTimeout(() => {
@@ -587,9 +649,9 @@ async function handleProofGeneration(e, proofType) {
           try {
             const result = await navigator.permissions.query({ name: 'geolocation' });
             permissionState = result.state;
-            console.log('Geolocation permission state:', permissionState);
+            debugLog('Geolocation permission state:', permissionState);
           } catch (e) {
-            console.log('Could not query permission state:', e);
+            debugLog('Could not query permission state:', e);
           }
 
           const position = await new Promise((resolve, reject) => {
@@ -1314,6 +1376,22 @@ function setupSettings() {
     await loadPermissions();
     showNotification('All data cleared', 'success');
   });
+
+  // Show seed phrase (recovery phrase)
+  const showSeedPhraseButton = document.getElementById('show-seed-phrase');
+  if (showSeedPhraseButton) {
+    showSeedPhraseButton.addEventListener('click', async () => {
+      await showRecoveryPhrase();
+    });
+  }
+
+  // Import account from seed phrase
+  const importAccountButton = document.getElementById('import-account');
+  if (importAccountButton) {
+    importAccountButton.addEventListener('click', async () => {
+      await showImportModal();
+    });
+  }
 }
 
 /**
@@ -1332,6 +1410,332 @@ function showNotification(message, type = 'info') {
     notification.style.opacity = '0';
     setTimeout(() => notification.remove(), 300);
   }, 3000);
+}
+
+/**
+ * Show recovery phrase modal with word count selection
+ */
+async function showRecoveryPhrase() {
+  try {
+    // Get user_secret from storage (decrypted)
+    const userSecret = await getUserSecretSecurely();
+
+    if (!userSecret) {
+      showNotification('No account found. Generate a proof first to create an account.', 'error');
+      return;
+    }
+
+    // First, show word count selection
+    const selectionModal = document.createElement('div');
+    selectionModal.className = 'fixed inset-0 bg-black/80 flex items-center justify-center z-[100] p-4';
+    selectionModal.innerHTML = `
+      <div class="bg-zinc-900 rounded-lg max-w-md w-full p-5 border border-zinc-800">
+        <h2 class="text-base font-semibold text-white mb-3">Choose Recovery Phrase Length</h2>
+        <p class="text-xs text-zinc-400 mb-4">Select how many words you want in your recovery phrase</p>
+
+        <div class="space-y-2 mb-4">
+          <button id="select-12" class="w-full px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded text-sm transition-colors">
+            12 Words
+          </button>
+          <button id="select-24" class="w-full px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded text-sm transition-colors">
+            24 Words
+          </button>
+        </div>
+
+        <button id="cancel-selection" class="w-full px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 rounded text-xs transition-colors">
+          Cancel
+        </button>
+      </div>
+    `;
+
+    document.body.appendChild(selectionModal);
+
+    const showPhraseModal = async (wordCount) => {
+      // Import mnemonic library
+      const { userSecretToMnemonic } = await import('../lib/mnemonic.js');
+
+      // Convert to mnemonic
+      const mnemonic = userSecretToMnemonic(userSecret, wordCount);
+      const words = mnemonic.split(' ');
+
+      selectionModal.remove();
+
+      // Create phrase modal with proper scrolling
+      const modal = document.createElement('div');
+      modal.className = 'fixed inset-0 bg-black/80 flex items-center justify-center z-[100] p-4';
+      modal.innerHTML = `
+        <div class="bg-zinc-900 rounded-lg max-w-lg w-full max-h-[90vh] flex flex-col border border-zinc-800">
+          <div class="p-5 border-b border-zinc-800 flex-shrink-0">
+            <div class="flex items-center gap-2">
+              <svg class="w-4 h-4 text-amber-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+              </svg>
+              <h2 class="text-sm font-semibold text-white">Recovery Phrase (${wordCount} Words)</h2>
+            </div>
+            <p class="text-xs text-zinc-400 mt-2">
+              Write these words down in order and store them safely
+            </p>
+          </div>
+
+          <div class="overflow-y-auto px-5 flex-1">
+            <div class="h-8"></div>
+            <div class="space-y-2">
+              ${Array.from({ length: Math.ceil(wordCount / 3) }, (_, rowIndex) => {
+                const startIdx = rowIndex * 3;
+                const rowWords = words.slice(startIdx, startIdx + 3);
+                return `
+                  <div class="flex gap-2">
+                    ${rowWords.map((word, colIdx) => {
+                      const wordNum = startIdx + colIdx + 1;
+                      return `
+                        <div class="flex-1 bg-zinc-800 border border-zinc-700 rounded p-2">
+                          <div class="text-[9px] text-zinc-500">${wordNum}</div>
+                          <div class="text-xs text-white font-mono">${word}</div>
+                        </div>
+                      `;
+                    }).join('')}
+                  </div>
+                `;
+              }).join('')}
+            </div>
+            <div class="h-8"></div>
+          </div>
+
+          <div class="p-5 border-t border-zinc-800 flex gap-2 flex-shrink-0">
+            <button id="copy-phrase" class="flex-1 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-medium transition-colors">
+              Copy
+            </button>
+            <button id="close-phrase-modal" class="flex-1 px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded text-xs transition-colors">
+              Done
+            </button>
+          </div>
+        </div>
+      `;
+
+      document.body.appendChild(modal);
+
+      // Copy button
+      modal.querySelector('#copy-phrase').addEventListener('click', async () => {
+        await copyToClipboard(mnemonic);
+      });
+
+      // Close button
+      modal.querySelector('#close-phrase-modal').addEventListener('click', () => {
+        modal.remove();
+      });
+
+      // Click outside to close
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+          modal.remove();
+        }
+      });
+    };
+
+    selectionModal.querySelector('#select-12').addEventListener('click', () => showPhraseModal(12));
+    selectionModal.querySelector('#select-24').addEventListener('click', () => showPhraseModal(24));
+    selectionModal.querySelector('#cancel-selection').addEventListener('click', () => selectionModal.remove());
+
+    selectionModal.addEventListener('click', (e) => {
+      if (e.target === selectionModal) {
+        selectionModal.remove();
+      }
+    });
+
+  } catch (error) {
+    console.error('Error showing recovery phrase:', error);
+    showNotification('Failed to show recovery phrase', 'error');
+  }
+}
+
+/**
+ * Show import account modal - individual word input boxes
+ */
+async function showImportModal() {
+  // Ask for word count first
+  const wordCountModal = document.createElement('div');
+  wordCountModal.className = 'fixed inset-0 bg-black/80 flex items-center justify-center z-[100] p-4';
+  wordCountModal.innerHTML = `
+    <div class="bg-zinc-900 rounded-lg max-w-md w-full p-5 border border-zinc-800">
+      <h2 class="text-sm font-semibold text-white mb-3">Import Account</h2>
+      <p class="text-xs text-zinc-400 mb-4">How many words is your recovery phrase?</p>
+
+      <div class="space-y-2">
+        <button id="import-12" class="w-full px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded text-sm transition-colors">
+          12 Words
+        </button>
+        <button id="import-24" class="w-full px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded text-sm transition-colors">
+          24 Words
+        </button>
+        <button id="cancel-wc" class="w-full px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 rounded text-xs transition-colors mt-3">
+          Cancel
+        </button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(wordCountModal);
+
+  const showWordInputs = (wordCount) => {
+    wordCountModal.remove();
+
+    const modal = document.createElement('div');
+    modal.className = 'fixed inset-0 bg-black/80 flex items-center justify-center z-[100] p-4';
+    modal.innerHTML = `
+      <div class="bg-zinc-900 rounded-lg max-w-2xl w-full max-h-[90vh] flex flex-col border border-zinc-800">
+        <div class="p-5 border-b border-zinc-800 flex-shrink-0">
+          <h2 class="text-sm font-semibold text-white mb-1">Import Account</h2>
+          <p class="text-xs text-zinc-400">Enter your ${wordCount}-word recovery phrase</p>
+        </div>
+
+        <div class="overflow-y-auto px-5 flex-1">
+          <div class="h-8"></div>
+          <div class="space-y-2">
+            ${Array.from({ length: Math.ceil(wordCount / 3) }, (_, rowIndex) => {
+              const startIdx = rowIndex * 3;
+              const rowWordCount = Math.min(3, wordCount - startIdx);
+              return `
+                <div class="flex gap-2">
+                  ${Array.from({ length: rowWordCount }, (_, colIdx) => {
+                    const wordNum = startIdx + colIdx + 1;
+                    return `
+                      <div class="flex-1">
+                        <div class="text-[9px] text-zinc-500 mb-1">${wordNum}.</div>
+                        <input
+                          type="text"
+                          data-index="${wordNum - 1}"
+                          class="word-box w-full bg-zinc-800 border border-zinc-700 rounded p-2 text-xs text-white font-mono focus:outline-none focus:border-emerald-500"
+                          autocomplete="off"
+                          spellcheck="false"
+                        />
+                      </div>
+                    `;
+                  }).join('')}
+                </div>
+              `;
+            }).join('')}
+          </div>
+          <div class="h-8"></div>
+        </div>
+
+        <div class="p-5 border-t border-zinc-800 flex-shrink-0">
+          <div id="import-error" class="hidden text-xs text-red-400 mb-3"></div>
+          <div class="flex gap-2">
+            <button id="import-btn" class="flex-1 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-medium transition-colors">
+              Import Account
+            </button>
+            <button id="cancel-import" class="flex-1 px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded text-xs transition-colors">
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    const wordBoxes = Array.from(modal.querySelectorAll('.word-box'));
+    const errorDiv = modal.querySelector('#import-error');
+
+    // Auto-advance on spacebar/enter, go back on backspace
+    wordBoxes.forEach((box, index) => {
+      box.addEventListener('keydown', (e) => {
+        if (e.key === ' ' || e.key === 'Enter') {
+          e.preventDefault();
+          if (index < wordBoxes.length - 1) {
+            wordBoxes[index + 1].focus();
+          }
+        } else if (e.key === 'Backspace' && box.value === '' && index > 0) {
+          e.preventDefault();
+          wordBoxes[index - 1].focus();
+        }
+      });
+    });
+
+    // Handle paste - distribute words across boxes
+    wordBoxes[0].addEventListener('paste', (e) => {
+      e.preventDefault();
+      const pastedText = e.clipboardData.getData('text');
+      const words = pastedText.trim().toLowerCase().split(/\s+/);
+
+      words.forEach((word, index) => {
+        if (index < wordBoxes.length) {
+          wordBoxes[index].value = word;
+        }
+      });
+
+      // Focus last filled box or first empty box
+      const lastFilledIndex = Math.min(words.length - 1, wordBoxes.length - 1);
+      if (lastFilledIndex < wordBoxes.length - 1) {
+        wordBoxes[lastFilledIndex + 1].focus();
+      } else {
+        wordBoxes[lastFilledIndex].focus();
+      }
+    });
+
+    modal.querySelector('#import-btn').addEventListener('click', async () => {
+      try {
+        const { validateMnemonic, mnemonicToUserSecret } = await import('../lib/mnemonic.js');
+
+        // Collect all words
+        const words = wordBoxes.map(box => box.value.trim().toLowerCase());
+
+        // Check all filled
+        if (words.some(w => !w)) {
+          errorDiv.textContent = 'Please fill in all words';
+          errorDiv.classList.remove('hidden');
+          return;
+        }
+
+        const mnemonic = words.join(' ');
+
+        // Validate mnemonic
+        if (!validateMnemonic(mnemonic)) {
+          errorDiv.textContent = 'Invalid recovery phrase. Please check your words.';
+          errorDiv.classList.remove('hidden');
+          return;
+        }
+
+        // Convert to user secret
+        const userSecret = mnemonicToUserSecret(mnemonic);
+
+        if (!userSecret) {
+          errorDiv.textContent = 'Failed to convert recovery phrase';
+          errorDiv.classList.remove('hidden');
+          return;
+        }
+
+        // Confirm replacement
+        if (!confirm('This will replace your current account. Continue?')) {
+          return;
+        }
+
+        // Clear storage and import new account (encrypted)
+        await chrome.storage.local.clear();
+        await storeUserSecretSecurely(userSecret);
+        await sendMessageSafely({ action: 'initialize' });
+        await loadProofs();
+        await loadPermissions();
+
+        modal.remove();
+        showNotification('Account imported successfully!', 'success');
+
+      } catch (error) {
+        console.error('Import error:', error);
+        errorDiv.textContent = `Error: ${error.message}`;
+        errorDiv.classList.remove('hidden');
+      }
+    });
+
+    modal.querySelector('#cancel-import').addEventListener('click', () => modal.remove());
+
+    // Focus first input
+    wordBoxes[0].focus();
+  };
+
+  wordCountModal.querySelector('#import-12').addEventListener('click', () => showWordInputs(12));
+  wordCountModal.querySelector('#import-24').addEventListener('click', () => showWordInputs(24));
+  wordCountModal.querySelector('#cancel-wc').addEventListener('click', () => wordCountModal.remove());
 }
 
 /**
@@ -1652,9 +2056,9 @@ async function showGenerateRequestPage(requestId) {
           try {
             const result = await navigator.permissions.query({ name: 'geolocation' });
             permissionState = result.state;
-            console.log('Geolocation permission state:', permissionState);
+            debugLog('Geolocation permission state:', permissionState);
           } catch (e) {
-            console.log('Could not query permission state:', e);
+            debugLog('Could not query permission state:', e);
           }
 
           const position = await new Promise((resolve, reject) => {
@@ -1759,6 +2163,9 @@ async function showEmailDomainGenerationModal(requestId) {
 
   const { origin, autoRegister } = response.request;
   const domain = new URL(origin).hostname;
+
+  // Store autoRegister flag for later use
+  sessionStorage.setItem('autoRegister', autoRegister ? 'true' : 'false');
 
   // Replace entire body with email domain generation modal
   document.body.className = 'w-[400px] h-[600px] bg-zinc-950 text-white font-mono';
@@ -1986,6 +2393,9 @@ async function handleEmailProofGenerationForRequest(file, requestId) {
         if (progressBar) progressBar.style.width = '100%';
         if (progressText) progressText.textContent = '✓ Proof generated!';
 
+        // Check if autoRegister is enabled before approving
+        const autoRegister = sessionStorage.getItem('autoRegister') === 'true';
+
         // Update the pending request with the generated proof
         await sendMessageSafely({
           action: 'updatePendingRequestProof',
@@ -2000,10 +2410,22 @@ async function handleEmailProofGenerationForRequest(file, requestId) {
           grantPermission: true
         });
 
+        // Clear session storage
+        sessionStorage.removeItem('autoRegister');
+
         // Close the popup window
-        setTimeout(() => {
-          window.close();
-        }, 1000);
+        // If autoRegister is true, give a tiny delay to ensure background completes
+        // Otherwise show success message for 1 second
+        if (autoRegister) {
+          // Small delay to ensure auto-registration completes
+          setTimeout(() => {
+            window.close();
+          }, 300);
+        } else {
+          setTimeout(() => {
+            window.close();
+          }, 1000);
+        }
       }
     } catch (error) {
       clearInterval(interval);

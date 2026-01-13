@@ -3,6 +3,16 @@
  * Handles proof storage, generation, and communication with websites
  */
 
+// Debug mode (set to false for production builds)
+const DEBUG_MODE = true; // TODO: Set to false before Chrome Web Store submission
+
+// Debug logger (only logs when DEBUG_MODE is true)
+const debugLog = (...args) => {
+  if (DEBUG_MODE) {
+    console.log(...args);
+  }
+};
+
 // Import WASM module
 import init, {
   init_country_prover,
@@ -15,6 +25,9 @@ import init, {
 
 // Import email parser
 import { parseEmail, clearSensitiveData } from '../lib/email-parser.js';
+
+// Import encryption utilities
+import { encryptValue, decryptValue, isEncrypted } from '../lib/encryption.js';
 
 // WASM initialization state
 let wasmInitialized = false;
@@ -44,13 +57,13 @@ async function initializeWASM() {
   if (wasmInitialized) return true;
 
   try {
-    console.log('[ZK Vault] Initializing WASM...');
+    debugLog('[ZK Vault] Initializing WASM...');
 
     // Initialize WASM module
     await init();
 
     // Initialize country prover (trusted setup)
-    console.log('[ZK Vault] Performing trusted setup for country proofs...');
+    debugLog('[ZK Vault] Performing trusted setup for country proofs...');
     const countrySuccess = init_country_prover();
 
     if (!countrySuccess) {
@@ -58,7 +71,7 @@ async function initializeWASM() {
     }
 
     // Initialize email prover (trusted setup)
-    console.log('[ZK Vault] Performing trusted setup for email proofs...');
+    debugLog('[ZK Vault] Performing trusted setup for email proofs...');
     const emailSuccess = init_email_prover();
 
     if (!emailSuccess) {
@@ -66,7 +79,7 @@ async function initializeWASM() {
     }
 
     wasmInitialized = true;
-    console.log('[ZK Vault] ✓ WASM initialized successfully (country + email provers ready)');
+    debugLog('[ZK Vault] ✓ WASM initialized successfully (country + email provers ready)');
     return true;
   } catch (error) {
     console.error('[ZK Vault] Failed to initialize WASM:', error);
@@ -78,10 +91,51 @@ async function initializeWASM() {
 initializeWASM();
 
 /**
+ * Securely store user secret with encryption
+ * @param {string} secret - The user secret to store
+ */
+async function storeUserSecretSecurely(secret) {
+  const encrypted = await encryptValue(secret);
+  await chrome.storage.local.set({ [STORAGE_KEYS.USER_SECRET]: encrypted });
+  debugLog('[ZK Vault] User secret stored securely (encrypted)');
+}
+
+/**
+ * Retrieve and decrypt user secret
+ * @returns {Promise<string|null>} Decrypted user secret or null if not found
+ */
+async function getUserSecretSecurely() {
+  const { [STORAGE_KEYS.USER_SECRET]: stored } = await chrome.storage.local.get(STORAGE_KEYS.USER_SECRET);
+
+  if (!stored) {
+    return null;
+  }
+
+  // Check if already encrypted
+  if (isEncrypted(stored)) {
+    try {
+      return await decryptValue(stored);
+    } catch (error) {
+      console.error('[ZK Vault] Failed to decrypt user secret:', error);
+      return null;
+    }
+  }
+
+  // Legacy: if stored as plaintext, encrypt it and re-save
+  if (typeof stored === 'string') {
+    debugLog('[ZK Vault] Migrating plaintext user secret to encrypted storage');
+    await storeUserSecretSecurely(stored);
+    return stored;
+  }
+
+  return null;
+}
+
+/**
  * Initialize extension on install
  */
 chrome.runtime.onInstalled.addListener(async () => {
-  console.log('ZK Vault installed');
+  debugLog('ZK Vault installed');
 
   // Initialize storage
   await chrome.storage.local.set({
@@ -122,7 +176,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return false;
   }
 
-  console.log('Background received message:', request);
+  debugLog('Background received message:', request);
 
   switch (request.action) {
     case 'requestProof':
@@ -178,9 +232,9 @@ async function handleProofRequest(request, sender, sendResponse) {
     const { requestId, proofType, autoRegister, backendUrl } = request;
     const origin = sender.url ? new URL(sender.url).origin : 'unknown';
 
-    console.log(`[ZK Vault] Proof request from ${origin} for ${proofType}`);
-    console.log(`[ZK Vault] Request ID: ${requestId}`);
-    console.log(`[ZK Vault] Auto-register: ${autoRegister}`);
+    debugLog(`[ZK Vault] Proof request from ${origin} for ${proofType}`);
+    debugLog(`[ZK Vault] Request ID: ${requestId}`);
+    debugLog(`[ZK Vault] Auto-register: ${autoRegister}`);
 
     // Get existing proofs
     const { [STORAGE_KEYS.PROOFS]: proofs } = await chrome.storage.local.get(STORAGE_KEYS.PROOFS);
@@ -188,14 +242,14 @@ async function handleProofRequest(request, sender, sendResponse) {
 
     // CASE C: Proof doesn't exist → Open generation popup
     if (!proof) {
-      console.log(`[ZK Vault] Proof doesn't exist, opening generation popup`);
+      debugLog(`[ZK Vault] Proof doesn't exist, opening generation popup`);
       await openGenerationPopup(requestId, origin, proofType, autoRegister, backendUrl, sendResponse);
       return;
     }
 
     // Check if proof is expired
     if (proof.expiresAt && Date.now() > proof.expiresAt) {
-      console.log(`[ZK Vault] Proof expired, opening generation popup`);
+      debugLog(`[ZK Vault] Proof expired, opening generation popup`);
       await openGenerationPopup(requestId, origin, proofType, autoRegister, backendUrl, sendResponse);
       return;
     }
@@ -206,13 +260,13 @@ async function handleProofRequest(request, sender, sendResponse) {
 
     // CASE B: Proof exists but no permission → Open permission popup
     if (!hasPermission) {
-      console.log(`[ZK Vault] Permission not granted, opening permission popup`);
+      debugLog(`[ZK Vault] Permission not granted, opening permission popup`);
       await openPermissionPopup(requestId, origin, proofType, proof, autoRegister, backendUrl, sendResponse);
       return;
     }
 
     // CASE A: Proof exists + permission granted → Auto-return with optional auto-registration
-    console.log(`[ZK Vault] Permission granted, auto-returning proof`);
+    debugLog(`[ZK Vault] Permission granted, auto-returning proof`);
     await returnProofWithRegistration(proof, autoRegister, backendUrl, sendResponse);
 
   } catch (error) {
@@ -248,7 +302,7 @@ async function openPermissionPopup(requestId, origin, proofType, proof, autoRegi
     height: popupHeight
   });
 
-  console.log(`[ZK Vault] Permission popup opened: ${popup.id}`);
+  debugLog(`[ZK Vault] Permission popup opened: ${popup.id}`);
 }
 
 /**
@@ -273,7 +327,7 @@ async function openGenerationPopup(requestId, origin, proofType, autoRegister, b
     height: 600
   });
 
-  console.log(`[ZK Vault] Generation popup opened: ${popup.id}`);
+  debugLog(`[ZK Vault] Generation popup opened: ${popup.id}`);
 }
 
 /**
@@ -286,13 +340,13 @@ async function returnProofWithRegistration(proof, autoRegister, backendUrl, send
   if (autoRegister && backendUrl) {
     try {
       registration = await performAutoRegistration(proof, backendUrl);
-      console.log(`[ZK Vault] Auto-registration successful:`, registration);
+      debugLog(`[ZK Vault] Auto-registration successful:`, registration);
     } catch (error) {
       // Check if error is due to proof already being used (expected when reusing existing proof)
       const errorMessage = error.message || '';
       if (errorMessage.includes('already used') || errorMessage.includes('already registered')) {
-        console.log('[ZK Vault] Proof already registered - this is normal when reusing an existing proof');
-        console.log('[ZK Vault] User should already be logged in on the frontend');
+        debugLog('[ZK Vault] Proof already registered - this is normal when reusing an existing proof');
+        debugLog('[ZK Vault] User should already be logged in on the frontend');
         // Don't treat this as a fatal error - just return the proof without registration
         // The frontend will handle this by using existing session data
       } else {
@@ -322,7 +376,7 @@ async function returnProofWithRegistration(proof, autoRegister, backendUrl, send
  * Perform auto-registration with backend
  */
 async function performAutoRegistration(proof, backendUrl) {
-  console.log(`[ZK Vault] Auto-registering with ${backendUrl}`);
+  debugLog(`[ZK Vault] Auto-registering with ${backendUrl}`);
 
   // Validate backend URL (must be HTTPS and not obviously malicious)
   try {
@@ -338,7 +392,7 @@ async function performAutoRegistration(proof, backendUrl) {
   const payload = await buildRegistrationPayload(proof);
 
   // Make registration request
-  console.log('[ZK Vault] Sending registration payload:', JSON.stringify(payload, null, 2));
+  debugLog('[ZK Vault] Sending registration payload:', JSON.stringify(payload, null, 2));
 
   const response = await fetch(backendUrl, {
     method: 'POST',
@@ -348,7 +402,7 @@ async function performAutoRegistration(proof, backendUrl) {
     body: JSON.stringify(payload)
   });
 
-  console.log('[ZK Vault] Backend response status:', response.status);
+  debugLog('[ZK Vault] Backend response status:', response.status);
 
   if (!response.ok) {
     // Try to get error details from response body
@@ -369,7 +423,7 @@ async function performAutoRegistration(proof, backendUrl) {
 
   const result = await response.json();
 
-  console.log('[ZK Vault] Registration result from backend:', result);
+  debugLog('[ZK Vault] Registration result from backend:', result);
 
   // Backend returns {user, token} directly (no success field)
   if (!result.user || !result.token) {
@@ -384,11 +438,12 @@ async function performAutoRegistration(proof, backendUrl) {
 }
 
 /**
- * Get or generate stable user secret (stored in extension storage)
+ * Get or generate stable user secret (stored in extension storage with encryption)
  * This secret is used to generate a consistent identity hash across all proof types
  */
 async function getUserSecret() {
-  const { [STORAGE_KEYS.USER_SECRET]: secret } = await chrome.storage.local.get(STORAGE_KEYS.USER_SECRET);
+  // Try to retrieve encrypted secret
+  const secret = await getUserSecretSecurely();
 
   if (secret) {
     return secret;
@@ -399,9 +454,9 @@ async function getUserSecret() {
   crypto.getRandomValues(array);
   const newSecret = Array.from(array, b => b.toString(16).padStart(2, '0')).join('');
 
-  // Store it permanently
-  await chrome.storage.local.set({ [STORAGE_KEYS.USER_SECRET]: newSecret });
-  console.log('[ZK Vault] Generated new user secret for stable identity');
+  // Store it permanently (encrypted)
+  await storeUserSecretSecurely(newSecret);
+  debugLog('[ZK Vault] Generated new user secret for stable identity (stored encrypted)');
 
   return newSecret;
 }
@@ -419,7 +474,7 @@ async function getIdentityHash() {
  * Build registration payload for backend (async)
  */
 async function buildRegistrationPayload(proof) {
-  console.log('[ZK Vault] Building registration payload for proof:', proof);
+  debugLog('[ZK Vault] Building registration payload for proof:', proof);
 
   if (!proof || !proof.type) {
     console.error('[ZK Vault] Invalid proof structure:', proof);
@@ -509,7 +564,7 @@ async function handleApproveProofRequest(request, sendResponse) {
       }
       permissions[pendingRequest.origin][pendingRequest.proofType] = true;
       await chrome.storage.local.set({ [STORAGE_KEYS.PERMISSIONS]: permissions });
-      console.log(`[ZK Vault] Permission granted for ${pendingRequest.origin} → ${pendingRequest.proofType}`);
+      debugLog(`[ZK Vault] Permission granted for ${pendingRequest.origin} → ${pendingRequest.proofType}`);
     }
 
     // Return proof with optional auto-registration
@@ -568,7 +623,7 @@ async function handleUpdatePendingRequestProof(request, sendResponse) {
   pendingRequest.proof = proof;
   pendingRequests.set(requestId, pendingRequest);
 
-  console.log(`[ZK Vault] Updated pending request ${requestId} with generated proof`);
+  debugLog(`[ZK Vault] Updated pending request ${requestId} with generated proof`);
   sendResponse({ success: true });
 }
 
@@ -595,7 +650,7 @@ async function handleProofGeneration(request, sendResponse) {
   try {
     const { proofType, privateData } = request;
 
-    console.log(`Generating ${proofType} proof...`);
+    debugLog(`Generating ${proofType} proof...`);
 
     // Generate proof based on type
     let proof;
@@ -642,7 +697,7 @@ async function handleProofGeneration(request, sendResponse) {
  * Generate email domain proof - REAL ZK PROOF IMPLEMENTATION
  */
 async function generateEmailDomainProof(privateData) {
-  console.log('[ZK Vault] Starting email domain proof generation...');
+  debugLog('[ZK Vault] Starting email domain proof generation...');
 
   const { emlContent } = privateData;
 
@@ -664,14 +719,14 @@ async function generateEmailDomainProof(privateData) {
 
   try {
     // Parse email to extract DKIM and domain (ephemeral processing)
-    console.log('[ZK Vault] Parsing email headers...');
+    debugLog('[ZK Vault] Parsing email headers...');
     const parsed = parseEmail(rawEmail);
     domain = parsed.domain;
     dkimSignature = parsed.dkimSignature;
     authResults = parsed.authResults;
 
-    console.log('[ZK Vault] ✓ Email parsed successfully');
-    console.log('[ZK Vault] Domain:', domain);
+    debugLog('[ZK Vault] ✓ Email parsed successfully');
+    debugLog('[ZK Vault] Domain:', domain);
 
     // CRITICAL: Clear raw email from memory immediately after parsing
     rawEmail = null;
@@ -679,13 +734,13 @@ async function generateEmailDomainProof(privateData) {
     delete privateData.emlContent;
 
     // Generate REAL ZK proof using WASM
-    console.log('[ZK Vault] Generating real Groth16 proof for email domain...');
-    console.log('[ZK Vault] This may take 30-60 seconds...');
+    debugLog('[ZK Vault] Generating real Groth16 proof for email domain...');
+    debugLog('[ZK Vault] This may take 30-60 seconds...');
 
     let result;
     try {
       result = prove_email_domain(domain, dkimSignature, authResults);
-      console.log('[ZK Vault] WASM result received (EmailProofResult object)');
+      debugLog('[ZK Vault] WASM result received (EmailProofResult object)');
     } catch (wasmError) {
       console.error('[ZK Vault] WASM function threw error:', wasmError);
       throw new Error('WASM proof generation failed: ' + (wasmError?.message || String(wasmError)));
@@ -706,9 +761,9 @@ async function generateEmailDomainProof(privateData) {
     const resultDomain = result.domain;
     const error = result.error;
 
-    console.log('[ZK Vault] Success:', success);
-    console.log('[ZK Vault] DKIM verified:', dkimVerified);
-    console.log('[ZK Vault] Domain:', resultDomain);
+    debugLog('[ZK Vault] Success:', success);
+    debugLog('[ZK Vault] DKIM verified:', dkimVerified);
+    debugLog('[ZK Vault] Domain:', resultDomain);
 
     if (!success) {
       const errorMsg = error || 'Proof generation failed (no error message from WASM)';
@@ -719,16 +774,16 @@ async function generateEmailDomainProof(privateData) {
       throw new Error('DKIM verification failed - email signature invalid or not from ' + domain);
     }
 
-    console.log('[ZK Vault] ✓ Real ZK proof generated!');
+    debugLog('[ZK Vault] ✓ Real ZK proof generated!');
 
     // Extract all proof data from WASM result object
     const proofHex = result.proof_hex;
     const domainHash = result.domain_hash;
     const commitment = result.commitment;
 
-    console.log('[ZK Vault] Proof hex length:', proofHex.length);
-    console.log('[ZK Vault] Domain hash:', domainHash);
-    console.log('[ZK Vault] Commitment:', commitment);
+    debugLog('[ZK Vault] Proof hex length:', proofHex.length);
+    debugLog('[ZK Vault] Domain hash:', domainHash);
+    debugLog('[ZK Vault] Commitment:', commitment);
 
     return {
       type: PROOF_TYPES.EMAIL_DOMAIN,
@@ -759,7 +814,7 @@ async function generateEmailDomainProof(privateData) {
 async function generateCountryProof(privateData) {
   // PRIVACY: Use browser Geolocation API (no third-party services!)
   // Coordinates from popup → convert to country code locally
-  console.log('[ZK Vault] Generating country proof from coordinates...');
+  debugLog('[ZK Vault] Generating country proof from coordinates...');
 
   // Ensure WASM is initialized first
   if (!wasmInitialized) {
@@ -777,7 +832,7 @@ async function generateCountryProof(privateData) {
 
   const { latitude, longitude } = privateData;
 
-  console.log('[ZK Vault] Converting coordinates to country code...');
+  debugLog('[ZK Vault] Converting coordinates to country code...');
 
   // Convert coordinates to country using bounding boxes
   const countryCode = determineCountryFromCoordinates(latitude, longitude);
@@ -796,8 +851,8 @@ async function generateCountryProof(privateData) {
   };
   const countryName = countryNames[countryCode] || countryCode;
 
-  console.log('[ZK Vault] Detected country:', countryName);
-  console.log('[ZK Vault] Generating real Groth16 proof for country:', countryName);
+  debugLog('[ZK Vault] Detected country:', countryName);
+  debugLog('[ZK Vault] Generating real Groth16 proof for country:', countryName);
 
   // Generate ZK proof for the detected country
   const result = prove_country(countryCode);
@@ -806,8 +861,8 @@ async function generateCountryProof(privateData) {
     throw new Error(result.error || 'Proof generation failed');
   }
 
-  console.log('[ZK Vault] ✓ Real ZK proof generated!');
-  console.log('[ZK Vault] Country:', result.country_code, '-', result.country_name);
+  debugLog('[ZK Vault] ✓ Real ZK proof generated!');
+  debugLog('[ZK Vault] Country:', result.country_code, '-', result.country_name);
 
   return {
     type: PROOF_TYPES.COUNTRY,
@@ -976,4 +1031,4 @@ async function hashString(str) {
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-console.log('ZK Vault service worker loaded');
+debugLog('ZK Vault service worker loaded');

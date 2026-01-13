@@ -196,7 +196,44 @@ if (file.size < 100) {
 
 ---
 
-### 🟡 6. Same Commitment Per Country (DESIGN ISSUE)
+### ✅ 6. Debug Logging Gated Behind Flag (FIXED)
+
+**File**: `extension/background/service-worker.js:6-14`, `extension/popup/popup.js:7-15`
+**Issue**: Debug console.log statements in production could leak information
+
+**Solution Implemented**: Debug Mode Flag with Conditional Logging
+
+**Changes Made**:
+- ✅ Added `DEBUG_MODE` constant (default: true for development)
+- ✅ Created `debugLog()` wrapper function
+- ✅ Replaced ~50+ debug console.log statements with debugLog()
+- ✅ Kept console.error and console.warn for production errors
+- ✅ Added TODO comments to set DEBUG_MODE=false before Chrome Web Store submission
+
+**Technical Details**:
+```javascript
+// Debug mode (set to false for production builds)
+const DEBUG_MODE = true; // TODO: Set to false before Chrome Web Store submission
+
+// Debug logger (only logs when DEBUG_MODE is true)
+const debugLog = (...args) => {
+  if (DEBUG_MODE) {
+    console.log(...args);
+  }
+};
+
+// Usage
+debugLog('[ZK Vault] Proof request from', origin); // Only logs if DEBUG_MODE=true
+console.error('Critical error:', err); // Always logs
+```
+
+**Impact**: Easy toggle to remove debug logs for production, prevents information disclosure
+
+**Before Production**: Set `DEBUG_MODE = false` in both files
+
+---
+
+### 🟡 7. Same Commitment Per Country (DESIGN ISSUE)
 
 **File**: `src/wasm.rs:373-375`
 **Issue**: All users from same country have identical public inputs
@@ -223,7 +260,8 @@ This is actually **working as designed** based on our earlier discussion. The cu
 3. ✅ **DONE**: Add service worker initialization checks with retry logic
 4. ✅ **DONE**: Add origin validation to message handlers
 5. ✅ **DONE**: Implement file upload validation (size limits, type checks)
-6. 🟡 **OPTIONAL**: Remove debug console.log statements from production (kept for debugging, non-critical)
+6. ✅ **DONE**: Gate debug logging behind DEBUG_MODE flag
+7. ⚠️ **BEFORE RELEASE**: Set DEBUG_MODE=false in service-worker.js and popup.js
 
 ### Short Term (Next Release):
 7. Add request signing/authentication
