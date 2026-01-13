@@ -237,9 +237,22 @@ function setupEmailDomainHandlers() {
  * Handle email proof generation with file upload
  */
 async function handleEmailProofGeneration(file) {
-  // Validate file
+  // Validate file type
   if (!file.name.endsWith('.eml')) {
     showProofError('Please select a .eml file');
+    return;
+  }
+
+  // Validate file size (max 10MB to prevent DoS and parser issues)
+  const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+  if (file.size > MAX_FILE_SIZE) {
+    showProofError('File too large. Maximum size is 10MB.');
+    return;
+  }
+
+  // Validate file size (min 100 bytes - empty emails are suspicious)
+  if (file.size < 100) {
+    showProofError('File too small. Please select a valid email file.');
     return;
   }
 
@@ -1897,6 +1910,25 @@ async function showEmailDomainGenerationModal(requestId) {
  * Handle email proof generation for website request
  */
 async function handleEmailProofGenerationForRequest(file, requestId) {
+  // Validate file type
+  if (!file.name.endsWith('.eml')) {
+    showError('Please select a .eml file');
+    return;
+  }
+
+  // Validate file size (max 10MB)
+  const MAX_FILE_SIZE = 10 * 1024 * 1024;
+  if (file.size > MAX_FILE_SIZE) {
+    showError('File too large. Maximum size is 10MB.');
+    return;
+  }
+
+  // Validate file size (min 100 bytes)
+  if (file.size < 100) {
+    showError('File too small. Please select a valid email file.');
+    return;
+  }
+
   const container = document.getElementById('progress-container');
   container.classList.remove('hidden');
   container.innerHTML = `

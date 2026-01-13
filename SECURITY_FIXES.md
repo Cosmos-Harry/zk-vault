@@ -157,7 +157,46 @@ function isValidMessageOrigin(sender) {
 
 ---
 
-### 🟡 5. Same Commitment Per Country (DESIGN ISSUE)
+### ✅ 5. File Upload Validation (FIXED)
+
+**File**: `extension/popup/popup.js:240-257, 1913-1930`
+**Issue**: No validation of uploaded email files could lead to DoS or parser exploits
+
+**Solution Implemented**: File Type and Size Validation
+
+**Changes Made**:
+- ✅ Validates file extension (.eml only)
+- ✅ Maximum file size limit: 10MB (prevents DoS)
+- ✅ Minimum file size limit: 100 bytes (prevents empty/malformed files)
+- ✅ Applied to both normal and website request flows
+
+**Technical Details**:
+```javascript
+// Validate file type
+if (!file.name.endsWith('.eml')) {
+  showProofError('Please select a .eml file');
+  return;
+}
+
+// Validate file size (max 10MB to prevent DoS and parser issues)
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+if (file.size > MAX_FILE_SIZE) {
+  showProofError('File too large. Maximum size is 10MB.');
+  return;
+}
+
+// Validate file size (min 100 bytes - empty emails are suspicious)
+if (file.size < 100) {
+  showProofError('File too small. Please select a valid email file.');
+  return;
+}
+```
+
+**Impact**: Prevents DoS attacks via large files and protects against parser exploits
+
+---
+
+### 🟡 6. Same Commitment Per Country (DESIGN ISSUE)
 
 **File**: `src/wasm.rs:373-375`
 **Issue**: All users from same country have identical public inputs
@@ -183,13 +222,14 @@ This is actually **working as designed** based on our earlier discussion. The cu
 2. ✅ **DONE**: Remove third-party geolocation API (user manual selection)
 3. ✅ **DONE**: Add service worker initialization checks with retry logic
 4. ✅ **DONE**: Add origin validation to message handlers
-5. 🟡 **OPTIONAL**: Remove debug console.log statements from production (kept for debugging, non-critical)
+5. ✅ **DONE**: Implement file upload validation (size limits, type checks)
+6. 🟡 **OPTIONAL**: Remove debug console.log statements from production (kept for debugging, non-critical)
 
 ### Short Term (Next Release):
-6. Add request signing/authentication
-7. Implement file upload validation (size limits, type checks)
+7. Add request signing/authentication
 8. Add backup mechanism for user_secret
 9. Create SECURITY.md and vulnerability disclosure policy
+10. Consider user-specific commitments (design decision)
 
 ### Long Term:
 10. Comprehensive test suite
