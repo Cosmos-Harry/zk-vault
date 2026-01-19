@@ -65,6 +65,7 @@ const generateModal = document.getElementById('generate-modal');
 const modalTitle = document.getElementById('modal-title');
 const modalBody = document.getElementById('modal-body');
 const modalClose = document.querySelector('.modal-close');
+const modalCancelBtn = document.querySelector('.modal-cancel-btn');
 const proofOptions = document.querySelectorAll('.proof-option:not(.disabled)');
 const expiryDaysSelect = document.getElementById('expiry-days');
 const autoApproveCheckbox = document.getElementById('auto-approve');
@@ -216,6 +217,7 @@ function setupProofGeneration() {
 
   // Close modal
   modalClose.addEventListener('click', closeGenerateModal);
+  modalCancelBtn.addEventListener('click', closeGenerateModal);
   generateModal.addEventListener('click', (e) => {
     if (e.target === generateModal) {
       closeGenerateModal();
@@ -489,57 +491,59 @@ function getProofForm(proofType) {
   switch (proofType) {
     case 'email_domain':
       return `
-        <form id="proof-form" class="space-y-3.5">
-          <div class="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
-            <div class="flex items-start gap-2">
-              <svg class="w-4 h-4 flex-shrink-0 mt-0.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
-              </svg>
-              <div>
-                <p class="text-[11px] text-emerald-300 leading-relaxed">
-                  <strong>100% Private:</strong> Download one .eml from Gmail. No servers. No storage. No trace.
-                </p>
+        <form id="proof-form">
+          <div class="space-y-3">
+            <div class="p-2.5 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
+              <div class="flex items-start gap-2">
+                <svg class="w-4 h-4 flex-shrink-0 mt-0.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                </svg>
+                <div>
+                  <p class="text-[11px] text-emerald-300 leading-relaxed">
+                    <strong>100% Private:</strong> Download one .eml from Gmail. No servers. No storage. No trace.
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div class="bg-zinc-900/50 border border-zinc-700 rounded-lg p-3">
-            <div class="flex items-center gap-2 mb-2.5">
-              <div class="bg-emerald-500/15 w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0">
-                <span class="text-xs text-emerald-400 font-semibold">1</span>
+            <div class="bg-zinc-900/50 border border-zinc-700 rounded-lg p-2.5">
+              <div class="flex items-center gap-2 mb-2">
+                <div class="bg-emerald-500/15 w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0">
+                  <span class="text-xs text-emerald-400 font-semibold">1</span>
+                </div>
+                <p class="text-xs font-medium text-zinc-200">Download from Gmail</p>
               </div>
-              <p class="text-xs font-medium text-zinc-200">Download from Gmail</p>
+              <ol class="text-[11px] text-zinc-400 leading-relaxed pl-8 mb-2.5 space-y-0.5">
+                <li>• Open any email in Gmail</li>
+                <li>• Click ⋮ → "Show original"</li>
+                <li>• Click "Download original"</li>
+              </ol>
+              <button type="button" id="open-gmail-btn"
+                class="w-full py-1.5 px-3 bg-zinc-700 hover:bg-zinc-600 text-white rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-2">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                </svg>
+                Open Gmail
+              </button>
             </div>
-            <ol class="text-[11px] text-zinc-400 leading-relaxed pl-8 mb-3 space-y-0.5">
-              <li>• Open any email in Gmail</li>
-              <li>• Click ⋮ → "Show original"</li>
-              <li>• Click "Download original"</li>
-            </ol>
-            <button type="button" id="open-gmail-btn"
-              class="w-full py-2 px-4 bg-zinc-700 hover:bg-zinc-600 text-white rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-2">
-              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
-              </svg>
-              Open Gmail
-            </button>
-          </div>
 
-          <div class="bg-zinc-900/50 border border-zinc-700 rounded-lg p-3">
-            <div class="flex items-center gap-2 mb-3">
-              <div class="bg-emerald-500/15 w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0">
-                <span class="text-xs text-emerald-400 font-semibold">2</span>
+            <div class="bg-zinc-900/50 border border-zinc-700 rounded-lg p-2.5">
+              <div class="flex items-center gap-2 mb-2.5">
+                <div class="bg-emerald-500/15 w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0">
+                  <span class="text-xs text-emerald-400 font-semibold">2</span>
+                </div>
+                <p class="text-xs font-medium text-zinc-200">Upload .eml File</p>
               </div>
-              <p class="text-xs font-medium text-zinc-200">Upload .eml File</p>
+              <input type="file" id="eml-upload" accept=".eml" class="hidden" required>
+              <button type="button" id="upload-btn"
+                class="w-full py-2 px-3 bg-gradient-to-br from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white rounded-lg text-xs font-semibold transition-all hover:shadow-lg hover:shadow-emerald-500/20 flex items-center justify-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                </svg>
+                Choose .eml File
+              </button>
+              <p id="file-selected" class="text-[11px] text-zinc-400 hidden mt-1.5"></p>
             </div>
-            <input type="file" id="eml-upload" accept=".eml" class="hidden" required>
-            <button type="button" id="upload-btn"
-              class="w-full py-2 px-4 bg-gradient-to-br from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white rounded-lg text-xs font-semibold transition-all hover:shadow-lg hover:shadow-emerald-500/20 flex items-center justify-center gap-2">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
-              </svg>
-              Choose .eml File
-            </button>
-            <p id="file-selected" class="text-[11px] text-zinc-400 hidden mt-2"></p>
           </div>
 
           <div id="progress-container" class="hidden"></div>
@@ -2172,7 +2176,7 @@ async function showEmailDomainGenerationModal(requestId) {
   document.body.innerHTML = `
     <div class="w-full h-full flex flex-col">
       <!-- Header -->
-      <div class="px-4 py-4 border-b border-zinc-800 bg-zinc-950">
+      <div class="px-4 py-4 border-b border-zinc-800 bg-zinc-950 shrink-0">
         <div class="flex items-center gap-2">
           <div class="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" class="text-emerald-500">
@@ -2187,9 +2191,9 @@ async function showEmailDomainGenerationModal(requestId) {
       </div>
 
       <!-- Content -->
-      <div class="flex-1 overflow-y-auto px-4 py-3 bg-zinc-950">
+      <div class="flex-1 overflow-y-auto px-4 py-4 bg-zinc-950 min-h-0">
         <!-- Origin Info -->
-        <div class="mb-3">
+        <div class="mb-4">
           <div class="flex items-center gap-2 p-2.5 bg-zinc-900 border border-zinc-800 rounded-lg">
             <div class="w-8 h-8 rounded-lg bg-zinc-800 flex items-center justify-center flex-shrink-0">
               <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2204,7 +2208,7 @@ async function showEmailDomainGenerationModal(requestId) {
         </div>
 
         <!-- Privacy Notice -->
-        <div class="mb-3 p-2.5 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
+        <div class="mb-4 p-2.5 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
           <div class="flex items-start gap-2">
             <svg class="w-3.5 h-3.5 flex-shrink-0 mt-0.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
@@ -2216,7 +2220,7 @@ async function showEmailDomainGenerationModal(requestId) {
         </div>
 
         <!-- Step 1: Download Email -->
-        <div class="mb-3 bg-zinc-900/50 border border-zinc-700 rounded-lg p-3">
+        <div class="mb-4 bg-zinc-900/50 border border-zinc-700 rounded-lg p-3">
           <div class="flex items-center gap-2 mb-2">
             <div class="bg-emerald-500/15 w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0">
               <span class="text-xs text-emerald-400 font-semibold">1</span>
@@ -2238,7 +2242,7 @@ async function showEmailDomainGenerationModal(requestId) {
         </div>
 
         <!-- Step 2: Upload File -->
-        <div class="mb-3 bg-zinc-900/50 border border-zinc-700 rounded-lg p-3">
+        <div class="mb-4 bg-zinc-900/50 border border-zinc-700 rounded-lg p-3">
           <div class="flex items-center gap-2 mb-2.5">
             <div class="bg-emerald-500/15 w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0">
               <span class="text-xs text-emerald-400 font-semibold">2</span>
@@ -2261,7 +2265,7 @@ async function showEmailDomainGenerationModal(requestId) {
       </div>
 
       <!-- Cancel Button (fixed footer) -->
-      <div class="px-4 py-4 border-t border-zinc-800 bg-zinc-950">
+      <div class="px-4 pt-4 pb-10 border-t border-zinc-800 bg-zinc-950 shrink-0">
         <button id="cancel-btn" class="w-full py-2.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-400 rounded-lg text-xs font-semibold transition-colors">
           Cancel
         </button>
